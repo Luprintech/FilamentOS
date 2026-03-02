@@ -1,0 +1,19 @@
+{
+  "name": "Calculadora 3D — Luprintech",
+  "short_name": "Calc 3D",
+  "description": "Calcula el coste real de tus impresiones 3D",
+  "start_url": "/",
+  "scope": "/",
+  "display": "standalone",
+  "orientation": "portrait-primary",
+  "background_color": "#f0f4f8",
+  "theme_color": "#29aae1",
+  "icons": [
+    {
+      "src": "/Logo.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any"
+    }
+  ]
+}
