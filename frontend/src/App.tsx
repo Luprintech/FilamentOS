@@ -35,7 +35,7 @@ function ThemeToggle() {
 }
 
 function Calculator() {
-  const { user, logout } = useAuth();
+  const { user, logout, loginWithGoogle } = useAuth();
   const { canInstall, install } = usePwaInstall();
   const form = useForm<FormData>({
     resolver: zodResolver(formSchema),
@@ -78,14 +78,22 @@ function Calculator() {
               </Button>
             )}
             <ThemeToggle />
-            <Button onClick={logout} variant="outline" size="icon" title="Cerrar sesión">
-              <LogOut className="h-4 w-4" />
-            </Button>
-            {avatarUrl && (
-              <Avatar>
-                <AvatarImage src={avatarUrl} alt={displayName} />
-                <AvatarFallback>{initials}</AvatarFallback>
-              </Avatar>
+            {user ? (
+              <>
+                <Button onClick={logout} variant="outline" size="icon" title="Cerrar sesión">
+                  <LogOut className="h-4 w-4" />
+                </Button>
+                {avatarUrl && (
+                  <Avatar>
+                    <AvatarImage src={avatarUrl} alt={displayName} />
+                    <AvatarFallback>{initials}</AvatarFallback>
+                  </Avatar>
+                )}
+              </>
+            ) : (
+              <Button onClick={loginWithGoogle} variant="outline" size="sm">
+                Iniciar sesión con Google
+              </Button>
             )}
           </div>
         </header>
@@ -130,7 +138,7 @@ function Calculator() {
 }
 
 function AppContent() {
-  const { user, loading } = useAuth();
+  const { loading } = useAuth();
   const { accepted, accept } = useCookieConsent();
 
   return (
@@ -139,10 +147,8 @@ function AppContent() {
         <div className="flex h-screen items-center justify-center">
           <Loader2 className="h-12 w-12 animate-spin text-primary" />
         </div>
-      ) : user ? (
-        <Calculator />
       ) : (
-        <LoginPage />
+        <Calculator />
       )}
       {!accepted && <CookieBanner onAccept={accept} />}
     </>

@@ -14,6 +14,7 @@ import { useToast } from '@/hooks/use-toast';
 import { Trash2, FolderUp, ImageIcon, Loader2 } from 'lucide-react';
 import type { FormData } from '@/lib/schema';
 import { getProjects, deleteProject, type SavedProject } from '@/lib/projects';
+import { useAuth } from '@/context/auth-context';
 
 interface SavedProjectsDialogProps {
   form: UseFormReturn<FormData>;
@@ -22,12 +23,18 @@ interface SavedProjectsDialogProps {
 
 export function SavedProjectsDialog({ form, children }: SavedProjectsDialogProps) {
   const { toast } = useToast();
+  const { user } = useAuth();
   const [isOpen, setIsOpen] = useState(false);
   const [projects, setProjects] = useState<SavedProject[]>([]);
   const [isLoading, setIsLoading] = useState(false);
 
   useEffect(() => {
     if (!isOpen) return;
+    // Si no hay usuario autenticado, no intentamos cargar proyectos desde el servidor
+    if (!user) {
+      setProjects([]);
+      return;
+    }
     setIsLoading(true);
     getProjects().then(({ data, error }) => {
       if (error) {
@@ -37,7 +44,7 @@ export function SavedProjectsDialog({ form, children }: SavedProjectsDialogProps
       }
       setIsLoading(false);
     });
-  }, [isOpen, toast]);
+  }, [isOpen, toast, user]);
 
   const handleLoadProject = (project: SavedProject) => {
     form.reset(project);
@@ -71,6 +78,13 @@ export function SavedProjectsDialog({ form, children }: SavedProjectsDialogProps
             {isLoading ? (
               <div className="flex items-center justify-center py-10">
                 <Loader2 className="h-8 w-8 animate-spin text-primary" />
+              </div>
+            ) : !user ? (
+              <div className="flex items-center justify-center h-full">
+                <p className="text-center text-muted-foreground py-10">
+                  Para ver y guardar tus proyectos necesitas iniciar sesión con Google desde el botón de arriba a la
+                  derecha.
+                </p>
               </div>
             ) : projects.length > 0 ? (
               <ul className="space-y-2">

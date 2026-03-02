@@ -57,7 +57,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from ".
 
 export function CalculatorForm({ form }: { form: UseFormReturn<FormData> }) {
   const { toast } = useToast();
-  const { user } = useAuth();
+  const { user, loginWithGoogle } = useAuth();
   const [isAnalyzing, setIsAnalyzing] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -125,7 +125,10 @@ export function CalculatorForm({ form }: { form: UseFormReturn<FormData> }) {
   }
 
   const handleSaveProject = async () => {
-    if (!user) return;
+    if (!user) {
+      loginWithGoogle();
+      return;
+    }
     setIsSaving(true);
     try {
       const isValid = await form.trigger();
