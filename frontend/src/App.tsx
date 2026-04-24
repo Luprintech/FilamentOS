@@ -337,7 +337,7 @@ function AppShell() {
         </motion.header>
 
         <Tabs defaultValue="calculator" className="w-full">
-          <TabsList className="mb-7 grid h-auto w-full grid-cols-4 rounded-2xl border border-border/70 bg-card/95 p-1.5 print:hidden dark:border-white/10 dark:bg-card/70 sm:w-[840px]">
+          <TabsList className="mb-7 grid h-auto w-full grid-cols-4 rounded-2xl border border-border/70 bg-card/95 p-1.5 print:hidden dark:border-white/10 dark:bg-card/70">
             <TabsTrigger value="calculator" className="rounded-xl py-2.5 font-bold data-[state=active]:bg-primary data-[state=active]:text-primary-foreground data-[state=active]:shadow-lg">
               <CalculatorIcon className="mr-0 h-4 w-4 sm:mr-2" />
               <span className="hidden sm:inline">{t('tab_calculator')}</span>

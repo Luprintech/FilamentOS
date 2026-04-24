@@ -26,6 +26,7 @@ export function useStatsQuery(filters: StatsFilters) {
     debouncedFrom,
     debouncedTo,
     filters.projectId,
+    filters.status,
     filters.granularity,
   ] as const;
 
@@ -36,6 +37,7 @@ export function useStatsQuery(filters: StatsFilters) {
         from: debouncedFrom,
         to: debouncedTo,
         projectId: filters.projectId,
+        status: filters.status,
         granularity: filters.granularity,
       }),
     staleTime: 5 * 60 * 1000, // 5 minutes

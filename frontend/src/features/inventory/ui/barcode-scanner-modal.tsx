@@ -58,7 +58,13 @@ interface BarcodeScannerModalProps {
 }
 
 const READER_ID = 'filamentos-qr-reader';
-const IS_IOS = /iPad|iPhone|iPod/.test(typeof navigator !== 'undefined' ? navigator.userAgent : '');
+
+// Detecta iOS incluyendo iPads modernos con userAgent genérico
+const IS_IOS =
+  /iPad|iPhone|iPod/.test(typeof navigator !== 'undefined' ? navigator.userAgent : '') ||
+  (typeof navigator !== 'undefined' &&
+    navigator.maxTouchPoints > 1 &&
+    /Mac/.test(navigator.platform ?? ''));
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -134,8 +140,8 @@ export function BarcodeScannerModal({ open, onClose, onFill }: BarcodeScannerMod
     setResult(null);
     setLookupState('idle');
 
-    // Give the DOM element time to render
-    await new Promise((r) => setTimeout(r, 100));
+    // Dar tiempo al DOM para renderizar el elemento antes de iniciar el scanner
+    await new Promise((r) => setTimeout(r, 150));
 
     try {
       if (!window.isSecureContext) {
@@ -148,27 +154,24 @@ export function BarcodeScannerModal({ open, onClose, onFill }: BarcodeScannerMod
         return;
       }
 
-      const permissionStream = await navigator.mediaDevices.getUserMedia({
-        video: {
-          facingMode: IS_IOS ? 'environment' : { ideal: 'environment' },
-        },
-        audio: false,
-      });
-      permissionStream.getTracks().forEach((track) => track.stop());
-
+      // Instanciar el scanner si no existe
       if (!scannerRef.current) {
         scannerRef.current = new Html5Qrcode(READER_ID, { verbose: false });
       }
 
       setCameraReady(true);
 
+      // Configuración de cámara trasera compatible con iOS y Android
+      const cameraConfig = IS_IOS
+        ? { facingMode: 'environment' }
+        : { facingMode: { ideal: 'environment' } };
+
       await scannerRef.current.start(
-        { facingMode: IS_IOS ? 'environment' : { ideal: 'environment' } },
+        cameraConfig,
         {
-          fps: IS_IOS ? 6 : 10,
-          qrbox: { width: 220, height: 220 },
-          aspectRatio: 1,
-          disableFlip: false,
+          fps: IS_IOS ? 5 : 10,
+          qrbox: { width: 200, height: 200 },
+          disableFlip: IS_IOS, // iOS tiene issues con flip
         },
         (decodedText) => {
           void handleCodeDetected(decodedText);
@@ -177,8 +180,17 @@ export function BarcodeScannerModal({ open, onClose, onFill }: BarcodeScannerMod
       );
       setCameraActive(true);
     } catch (err) {
+      setCameraReady(false);
+      const name = err instanceof Error ? err.name : '';
       const msg = err instanceof Error ? err.message : '';
-      if (msg.toLowerCase().includes('https') || msg.toLowerCase().includes('secure') || msg.toLowerCase().includes('permission')) {
+
+      if (name === 'NotAllowedError' || msg.toLowerCase().includes('permission') || msg.toLowerCase().includes('denied')) {
+        setCameraError(t('scan_ios_hint')); // "Necesitas dar permiso de cámara"
+      } else if (name === 'NotFoundError' || msg.toLowerCase().includes('not found')) {
+        setCameraError('No se encontró ninguna cámara en este dispositivo.');
+      } else if (name === 'NotReadableError' || msg.toLowerCase().includes('in use')) {
+        setCameraError('La cámara está siendo usada por otra aplicación.');
+      } else if (msg.toLowerCase().includes('https') || msg.toLowerCase().includes('secure')) {
         setCameraError(t('scan_ios_hint'));
       } else {
         setCameraError(t('scan_camera_error'));
@@ -213,7 +225,7 @@ export function BarcodeScannerModal({ open, onClose, onFill }: BarcodeScannerMod
 
   return (
     <Dialog open={open} onOpenChange={(v) => { if (!v) onClose(); }}>
-      <DialogContent className="w-full sm:max-w-[480px] max-h-[90vh] overflow-y-auto">
+      <DialogContent className="w-[95vw] max-w-[480px] max-h-[90dvh] overflow-y-auto p-4 sm:p-6">
         <DialogHeader>
           <DialogTitle>{t('scan_title')}</DialogTitle>
           <DialogDescription>{t('scan_subtitle')}</DialogDescription>
