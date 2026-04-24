@@ -182,7 +182,7 @@ Utiliza únicamente cookies técnicas para la autenticación. Sin seguimiento ni
 ## Apoya el proyecto
 
 <a href="https://www.buymeacoffee.com/luprintech" target="_blank">
-  <img src="https://img.buymeacoffee.com/button-api/?text=Alimenta%20filamentOS&emoji=🍔&slug=luprintech&button_colour=e694df&font_colour=000000&font_family=Cookie&outline_colour=000000&coffee_colour=FFDD00" alt="Buy Me A Coffee" height="45" />
+  <img src="https://img.shields.io/badge/🍔_Alimenta_FilamentOS-e694df?style=for-the-badge" alt="Buy Me A Coffee" />
 </a>
 
 ---
