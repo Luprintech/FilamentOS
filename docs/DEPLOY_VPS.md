@@ -238,76 +238,124 @@ docker run hello-world
 
 ### T.1 — Apuntar el dominio al VPS
 
-En tu registrador (donde compraste el dominio: IONOS, Namecheap, OVH, Cloudflare, etc.) crea **dos registros A**:
+#### Si usas Cloudflare (recomendado)
+
+Entra en **dash.cloudflare.com** → tu dominio → **DNS → Records**. Crea un registro:
+
+| Tipo | Nombre | IPv4 | Proxy | TTL |
+| ---- | ------ | ---- | ----- | --- |
+| A | filamentos | TU_IP_VPS | 🔘 Gris (solo DNS) | Auto |
+
+> ⚠️ **Importante**: deja la nube en **gris** (solo DNS, sin proxy) mientras configuras Certbot. Let's Encrypt necesita llegar directamente al VPS para verificar el dominio. Una vez tengas el certificado, vuelves a ponerla naranja.
+
+Comprueba propagación desde el VPS:
+
+```bash
+dig filamentos.tudominio.com +short
+```
+
+Cuando devuelva la IP del VPS, continúa.
+
+#### Si no usas Cloudflare
+
+En tu registrador, crea un registro A:
 
 | Tipo | Nombre | Valor | TTL |
 | ---- | ------ | ----- | --- |
-| A    | @      | TU_IP_VPS | 3600 |
-| A    | www    | TU_IP_VPS | 3600 |
+| A | filamentos | TU_IP_VPS | 3600 |
 
-El DNS tarda entre minutos y unas horas en propagar. Verifícalo desde tu PC local:
+#### Caso real: Piensa Solutions como proveedor VPS
+
+Piensa Solutions tiene un **firewall de red externo** independiente de UFW. Aunque UFW esté desactivado, el tráfico puede estar bloqueado. Ve al panel de Piensa Solutions → **Políticas de firewall**:
+
+1. Crea o edita una política con puertos TCP: `22, 80, 443`
+2. **Asígnala al VPS** — ojo, que aparezca con el círculo de la izquierda relleno/seleccionado. Si está sin seleccionar, la política existe pero no aplica a tu servidor.
+
+Prueba que el puerto 80 es accesible desde fuera:
 
 ```bash
-# En tu máquina local, no en el VPS:
-dig +short tudominio.com
-dig +short www.tudominio.com
+# Desde tu máquina local:
+curl -I http://TU_IP_VPS
 ```
 
-Tiene que devolver la IP del VPS. Si no, espera o revisa los registros. **No sigas hasta que resuelva**: Let's Encrypt necesita que el dominio ya apunte al VPS para emitir el certificado.
+Debe responder con `HTTP/1.1 200 OK` de Nginx. Si no responde (timeout), es el firewall del proveedor.
 
 ### T.2 — Instalar Nginx y Certbot
 
 ```bash
-sudo apt install -y nginx certbot python3-certbot-nginx
-sudo systemctl enable --now nginx
+apt install -y nginx certbot python3-certbot-nginx
+systemctl enable --now nginx
 ```
 
 Prueba abriendo `http://TU_IP_VPS` en el navegador: debe salir la página por defecto "Welcome to nginx!".
 
 ### T.3 — Colocar el site config de FilamentOS
 
-Más abajo, en la Fase A, clonas el repo en `/opt/filamentos`. Si aún no lo has hecho, hazlo ahora (ver Fase A.1). Después:
-
 ```bash
-# Editas el archivo para cambiar CAMBIAR.tudominio.com por tu dominio real
-sudo nano /opt/filamentos/deploy/nginx/filamentos.conf
-
-# Lo enlazas en sites-enabled
-sudo ln -s /opt/filamentos/deploy/nginx/filamentos.conf /etc/nginx/sites-available/filamentos.conf
-sudo ln -s /etc/nginx/sites-available/filamentos.conf /etc/nginx/sites-enabled/filamentos.conf
-
-# Desactivas el sitio default de Nginx (opcional pero limpio)
-sudo rm -f /etc/nginx/sites-enabled/default
-
-# Test de sintaxis ANTES de reload — NUNCA reload sin test
-sudo nginx -t
-sudo systemctl reload nginx
+# Crear el config directamente (más rápido que copiarlo del repo)
+nano /etc/nginx/sites-available/filamentos
 ```
 
-Si `nginx -t` se queja, léelo con calma: suele decir exactamente la línea del problema.
+Pega este contenido (cambia el `server_name`):
+
+```nginx
+server {
+    listen 80;
+    server_name filamentos.tudominio.com;
+
+    client_max_body_size 25M;
+
+    location / {
+        proxy_pass http://127.0.0.1:3001;
+        proxy_http_version 1.1;
+        proxy_set_header Upgrade $http_upgrade;
+        proxy_set_header Connection 'upgrade';
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+        proxy_cache_bypass $http_upgrade;
+        proxy_read_timeout 120s;
+        proxy_connect_timeout 60s;
+    }
+}
+```
+
+```bash
+ln -s /etc/nginx/sites-available/filamentos /etc/nginx/sites-enabled/
+nginx -t && systemctl reload nginx
+```
 
 ### T.4 — HTTPS con Certbot
 
-Con el DNS ya apuntando, esto son 30 segundos:
+Con el DNS apuntando al VPS y la nube de Cloudflare en **gris**:
 
 ```bash
-sudo certbot --nginx -d tudominio.com -d www.tudominio.com
+certbot --nginx -d filamentos.tudominio.com
 ```
 
-Te pregunta email (para avisos de caducidad), aceptar términos, y si quieres redirección HTTP→HTTPS (di que sí: opción **2**).
+Te pregunta:
+- **Email**: el tuyo (para avisos de caducidad del cert)
+- **Términos**: `Y`
+- **Compartir email con EFF**: `N` (es opcional, no afecta al certificado)
 
-Certbot:
-1. Pide el certificado a Let's Encrypt.
-2. Modifica tu `filamentos.conf` para añadir el bloque `listen 443 ssl` y las rutas al cert.
-3. Añade la redirección HTTP→HTTPS.
-4. Programa la renovación automática (systemd timer).
+Certbot modifica el `filamentos` de Nginx automáticamente para añadir el bloque SSL y programa la renovación automática.
 
-Verifica la renovación:
+Verifica que la renovación automática funciona:
 
 ```bash
-sudo systemctl list-timers | grep certbot
-sudo certbot renew --dry-run
+certbot renew --dry-run
 ```
+
+#### Si usas Cloudflare: vuelve a poner la nube naranja
+
+Una vez Certbot haya terminado, ve a Cloudflare y activa el proxy (nube naranja) en el registro A. Luego en **SSL/TLS → Overview** asegúrate de que el modo sea **"Full"** (no "Flexible" ni "Full Strict").
+
+- **Flexible**: Cloudflare habla HTTPS con el usuario pero HTTP con tu VPS. Puede causar bucles de redirección.
+- **Full**: Cloudflare habla HTTPS con el usuario y HTTPS con tu VPS. Correcto.
+- **Full Strict**: igual que Full pero exige un cert válido de CA. Lo que tenemos con Certbot.
+
+Con Cloudflare en modo proxy, el HTTPS lo gestiona Cloudflare. El certificado de Certbot sigue siendo necesario para la comunicación Cloudflare→VPS.
 
 ---
 
