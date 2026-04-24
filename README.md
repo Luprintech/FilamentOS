@@ -33,11 +33,35 @@ Calcula costes reales, gestiona tu inventario de bobinas, lleva un tracker de pr
 ## Capturas
 
 <p align="center">
-  <img src="docs/oscuro.png" width="700" alt="FilamentOS modo oscuro" />
+  <img src="docs/Calculadora.png" width="700" alt="Calculadora de costes" />
+  <br/><sub>Calculadora de costes — wizard de 4 pasos con proyectos guardados</sub>
 </p>
 
 <p align="center">
-  <img src="docs/claro.png" width="700" alt="FilamentOS modo claro" />
+  <img src="docs/chatbot.png" width="700" alt="Bitácora de impresión" />
+  <br/><sub>Bitácora de impresión 3D con BOBINA, el asistente integrado</sub>
+</p>
+
+<p align="center">
+  <img src="docs/Inventario.png" width="700" alt="Inventario de filamento" />
+  <br/><sub>Inventario de bobinas con valor total, coste medio y stock bajo</sub>
+</p>
+
+<p align="center">
+  <img src="docs/examinar3mf.png" width="500" alt="Importar archivo 3MF" />
+  <br/><sub>Importación de archivos 3MF — extrae placas, filamentos, tiempos y pesos</sub>
+</p>
+
+<p align="center">
+  <img src="docs/idiomas.png" width="700" alt="Selector de idiomas" />
+  &nbsp;&nbsp;
+  <img src="docs/moneda.png" width="700" alt="Selector de moneda" />
+  <br/><sub>Disponible en 6 idiomas y múltiples monedas europeas</sub>
+</p>
+
+<p align="center">
+  <img src="docs/reporatar-bug.png" width="300" alt="BOBINA — asistente y reporte de bugs" />
+  <br/><sub>BOBINA — asistente integrado para soporte y sugerencias</sub>
 </p>
 
 ---
