@@ -1,8 +1,8 @@
 services:
   app:
     build: .
-    image: calculadora3d
-    container_name: calculadora3d
+    image: filamentos
+    container_name: filamentos
     restart: unless-stopped
     ports:
       - "3001:3001"

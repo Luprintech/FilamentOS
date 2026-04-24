@@ -2216,6 +2216,9 @@ app.get('/api/inventory/:spoolId/consumos', requireAuth, (req, res) => {
 // ── Producción ────────────────────────────────────────────────────────────────
 if (process.env.NODE_ENV === 'production') {
   const distPath = path.resolve(__dirname, '../../frontend/dist');
+  app.use('/assets', express.static(path.join(distPath, 'assets')));
+  app.use('/Logo.svg', express.static(path.join(distPath, 'Logo.svg')));
+  app.use('/manifest.json', express.static(path.join(distPath, 'manifest.json')));
   app.use(express.static(distPath));
   app.get('*', (_req, res) => res.sendFile(path.join(distPath, 'index.html')));
 }
