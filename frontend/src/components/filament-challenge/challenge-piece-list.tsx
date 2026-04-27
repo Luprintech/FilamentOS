@@ -321,7 +321,7 @@ export function ChallengePieceList({
 
       ) : isGrid ? (
         /* ── Grid view ──────────────────────────────────────────────────── */
-        <div className="grid grid-cols-2 gap-3 pb-8">
+        <div className="grid grid-cols-1 gap-4 pb-8 sm:grid-cols-2">
           {filtered.map((piece) => (
             <article
               key={piece.id}
@@ -329,7 +329,7 @@ export function ChallengePieceList({
               className={`group flex flex-col overflow-hidden rounded-[18px] border transition-all ${editingClass(piece.id)} ${dragRing(piece.id)}`}
             >
               {/* Image */}
-              <div className="relative aspect-video w-full overflow-hidden bg-white/[0.03]">
+              <div className="relative h-40 w-full shrink-0 overflow-hidden border-b border-white/[0.05] bg-white/[0.03]">
                 {piece.imageUrl ? (
                   <img src={piece.imageUrl} alt={piece.name} className="h-full w-full object-cover" />
                 ) : (
