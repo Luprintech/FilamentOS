@@ -321,7 +321,7 @@ export function ChallengePieceList({
 
       ) : isGrid ? (
         /* ── Grid view ──────────────────────────────────────────────────── */
-        <div className="grid grid-cols-2 gap-3 max-h-[calc(100vh-240px)] overflow-y-auto pr-1">
+        <div className="grid grid-cols-2 gap-3 pb-8">
           {filtered.map((piece) => (
             <article
               key={piece.id}
@@ -432,7 +432,7 @@ export function ChallengePieceList({
 
       ) : (
         /* ── List view ──────────────────────────────────────────────────── */
-        <div className="flex max-h-[calc(100vh-240px)] flex-col gap-2 overflow-y-auto pr-1">
+        <div className="flex flex-col gap-2 pb-8">
           {filtered.map((piece) => (
             <article
               key={piece.id}

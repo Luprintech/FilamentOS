@@ -192,16 +192,18 @@ export function FilamentTracker() {
               onEditProject={() => setLoginModalOpen(true)}
               onDeleteProject={() => setLoginModalOpen(true)}
             />
-            <div className="grid grid-cols-1 gap-6 lg:grid-cols-[1.1fr_0.9fr]">
+            <div className="grid grid-cols-1 gap-6 lg:grid-cols-[1.1fr_0.9fr] lg:items-start">
               {/* Form placeholder in guest mode */}
-              <div className="challenge-panel rounded-[24px] border border-white/[0.10] p-6 text-center">
-                <p className="text-muted-foreground text-sm">{t('tracker_guest_form_placeholder')}</p>
-                <Button
-                  className="challenge-btn-primary mt-4 rounded-full px-6 font-extrabold"
-                  onClick={() => setLoginModalOpen(true)}
-                >
-                  {t('tracker_login_to_add')}
-                </Button>
+              <div className="lg:sticky lg:top-6">
+                <div className="challenge-panel rounded-[24px] border border-white/[0.10] p-6 text-center">
+                  <p className="text-muted-foreground text-sm">{t('tracker_guest_form_placeholder')}</p>
+                  <Button
+                    className="challenge-btn-primary mt-4 rounded-full px-6 font-extrabold"
+                    onClick={() => setLoginModalOpen(true)}
+                  >
+                    {t('tracker_login_to_add')}
+                  </Button>
+                </div>
               </div>
               <ChallengePieceList
                 project={activeProject}
@@ -358,16 +360,18 @@ export function FilamentTracker() {
           ))}
         </div>
 
-        <div className="grid grid-cols-1 gap-6 lg:grid-cols-[1.1fr_0.9fr]">
-          <ChallengeForm
-            project={activeProject}
-            editingState={editingState}
-            pieces={visiblePieces}
-            onSave={handleSavePiece}
-            onUpdate={handleUpdatePiece}
-            onCancelEdit={() => setEditingState({ mode: 'create' })}
-            activeSpools={activeSpools}
-          />
+        <div className="grid grid-cols-1 gap-6 lg:grid-cols-[1.1fr_0.9fr] lg:items-start">
+          <div className="lg:sticky lg:top-6">
+            <ChallengeForm
+              project={activeProject}
+              editingState={editingState}
+              pieces={visiblePieces}
+              onSave={handleSavePiece}
+              onUpdate={handleUpdatePiece}
+              onCancelEdit={() => setEditingState({ mode: 'create' })}
+              activeSpools={activeSpools}
+            />
+          </div>
           <ChallengePieceList
             project={activeProject}
             pieces={visiblePieces}
