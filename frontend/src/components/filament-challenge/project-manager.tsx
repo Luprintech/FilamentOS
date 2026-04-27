@@ -120,43 +120,6 @@ export function ProjectForm({ defaultValues, onSubmit, onCancel, submitLabel }: 
         hint={t('pm_cover_hint')}
         processingLabel={t('tracker.upload.processing')}
       />
-          ) : (
-            <div className="flex h-20 w-20 shrink-0 items-center justify-center rounded-[14px] border border-dashed border-white/[0.18] bg-white/[0.03] text-muted-foreground">
-              <span className="text-2xl">🖼️</span>
-            </div>
-          )}
-          <div className="flex flex-col gap-1.5">
-            <Button
-              type="button"
-              variant="outline"
-              size="sm"
-              className="rounded-full text-xs font-bold"
-              onClick={() => document.getElementById('pm-cover-file')?.click()}
-            >
-                {coverImage ? t('pm_cover_change') : t('pm_cover_upload')}
-              </Button>
-            {coverImage && (
-              <Button
-                type="button"
-                variant="outline"
-                size="sm"
-                className="rounded-full text-xs font-bold border-destructive/30 text-destructive hover:bg-destructive/10"
-                onClick={() => setValue('coverImage', '')}
-              >
-                {t('pm_cover_remove')}
-              </Button>
-            )}
-            <p className="text-[0.75rem] text-muted-foreground">{t('pm_cover_hint')}</p>
-          </div>
-        </div>
-        <input
-          id="pm-cover-file"
-          type="file"
-          accept="image/*"
-          className="hidden"
-          onChange={handleCoverUpload}
-        />
-      </div>
 
       <div className="space-y-1.5">
         <Label htmlFor="pm-goal" className="text-xs font-bold uppercase tracking-wider text-muted-foreground">
