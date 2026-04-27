@@ -102,39 +102,47 @@ export function ImageUpload({
           isProcessing && 'pointer-events-none opacity-80',
         )}
       >
-        <div className="flex items-start gap-3">
-          {imagePreview ? (
-            <div className="relative shrink-0">
-              <img src={imagePreview} alt={t('cf_image_preview', 'Preview')} className={cn('rounded-[14px] object-cover border border-white/[0.12]', previewClassName)} />
-              <button
-                type="button"
-                onClick={onClear}
-                className="absolute -top-2 -right-2 flex h-5 w-5 items-center justify-center rounded-full bg-destructive text-[0.65rem] font-black text-white shadow-md transition-transform hover:scale-110"
-                aria-label={t('delete', 'Delete')}
-              >✕</button>
+        {!imagePreview ? (
+          <div className="flex flex-col items-center justify-center gap-3 text-center py-2">
+            <div className="space-y-1">
+              <p className="text-sm font-semibold text-foreground">
+                {isDragActive ? dropPrompt : dragPrompt}
+              </p>
+              <p className="text-[0.75rem] text-muted-foreground">{hint}</p>
             </div>
-          ) : (
-            <div className={cn('flex shrink-0 items-center justify-center rounded-[14px] border border-dashed border-white/[0.18] bg-white/[0.03] text-muted-foreground', previewClassName)}>
-              <span className="text-2xl">🖼️</span>
-            </div>
-          )}
-          <div className="flex flex-1 flex-col justify-center gap-1.5">
-            <p className="text-sm font-semibold text-foreground">
-              {isDragActive ? dropPrompt : dragPrompt}
-            </p>
-            <Button type="button" variant="outline" size="sm" className="w-fit rounded-full text-xs font-bold" onClick={() => fileInputRef.current?.click()}>
-              {imagePreview ? changeBtn : uploadBtn}
+            <Button type="button" variant="outline" size="sm" className="rounded-full text-xs font-bold" onClick={() => fileInputRef.current?.click()}>
+              {uploadBtn}
             </Button>
-            <p className="text-[0.75rem] text-muted-foreground">{hint}</p>
             {isProcessing && (
-              <div className="inline-flex items-center gap-2 text-xs font-semibold text-muted-foreground">
+              <div className="inline-flex items-center gap-2 text-xs font-semibold text-muted-foreground mt-1">
                 <Loader2 className="h-4 w-4 animate-spin" />
                 <span>{processingLabel}</span>
               </div>
             )}
-            {error && <p className="text-xs font-semibold text-destructive">{error}</p>}
+            {error && <p className="text-xs font-semibold text-destructive mt-1">{error}</p>}
           </div>
-        </div>
+        ) : (
+          <div className="flex flex-col gap-3">
+            <div className="relative w-full overflow-hidden rounded-[14px] border border-white/[0.12] bg-black/20">
+              <img src={imagePreview} alt={t('cf_image_preview', 'Preview')} className="max-h-56 w-full object-contain" />
+            </div>
+            <div className="flex flex-wrap items-center justify-center gap-2">
+              <Button type="button" variant="outline" size="sm" className="rounded-full text-xs font-bold" onClick={() => fileInputRef.current?.click()}>
+                {changeBtn}
+              </Button>
+              <Button type="button" variant="outline" size="sm" className="rounded-full text-xs font-bold border-destructive/30 text-destructive hover:bg-destructive/10" onClick={onClear}>
+                {t('delete', 'Eliminar')}
+              </Button>
+            </div>
+            {isProcessing && (
+              <div className="inline-flex items-center justify-center gap-2 text-xs font-semibold text-muted-foreground">
+                <Loader2 className="h-4 w-4 animate-spin" />
+                <span>{processingLabel}</span>
+              </div>
+            )}
+            {error && <p className="text-xs text-center font-semibold text-destructive">{error}</p>}
+          </div>
+        )}
       </div>
       <input ref={fileInputRef} type="file" accept={accept} className="hidden" onChange={handleFileChange} />
     </div>
