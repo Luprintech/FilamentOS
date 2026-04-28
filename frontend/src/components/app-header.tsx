@@ -1,0 +1,257 @@
+import React from 'react';
+import { Sun, Moon, Download, LogOut, FlaskConical, Info, Menu, X } from 'lucide-react';
+import { Loader2 } from 'lucide-react';
+import { useTheme } from 'next-themes';
+import { useTranslation } from 'react-i18next';
+import { motion } from 'framer-motion';
+import { Button } from '@/components/ui/button';
+import { Avatar, AvatarImage, AvatarFallback } from '@/components/ui/avatar';
+import { LanguageSelector } from '@/components/language-selector';
+import { CurrencySelector } from '@/components/currency-selector';
+import { AboutModal } from '@/components/about-modal';
+import { useAuth } from '@/context/auth-context';
+import { usePwaInstall } from '@/hooks/use-pwa-install';
+
+function ThemeToggle() {
+  const { resolvedTheme, setTheme } = useTheme();
+  const { t } = useTranslation();
+  return (
+    <Button
+      variant="outline"
+      size="icon"
+      aria-label={resolvedTheme === 'dark' ? t('theme_dark') : t('theme_light')}
+      onClick={() => setTheme(resolvedTheme === 'dark' ? 'light' : 'dark')}
+    >
+      {resolvedTheme === 'dark' ? <Sun className="h-4 w-4" /> : <Moon className="h-4 w-4" />}
+    </Button>
+  );
+}
+
+export function AppHeader() {
+  const { user, logout, loginWithGoogle, isGuest, exitGuest } = useAuth();
+  const { t } = useTranslation();
+  const { resolvedTheme } = useTheme();
+  const { canInstall, install } = usePwaInstall();
+  const [aboutOpen, setAboutOpen] = React.useState(false);
+  const [mobileMenuOpen, setMobileMenuOpen] = React.useState(false);
+  const [isDevMode, setIsDevMode] = React.useState(false);
+  const [devLoading, setDevLoading] = React.useState(false);
+
+  const logoSrc = resolvedTheme === 'dark' ? '/filamentos_negro.png' : '/filamentos_blanco.png';
+  const displayName = user?.name ?? user?.email ?? (isGuest ? 'Invitado' : '');
+  const avatarUrl = user?.photo ?? undefined;
+  const initials = displayName.charAt(0).toUpperCase();
+
+  React.useEffect(() => {
+    fetch('/api/dev/ping', { credentials: 'include' })
+      .then((r) => { if (r.ok) setIsDevMode(true); })
+      .catch(() => {});
+  }, []);
+
+  async function handleDevLogin() {
+    setDevLoading(true);
+    try {
+      const res = await fetch('/api/dev/login-seed', { method: 'POST', credentials: 'include' });
+      if (res.ok) window.location.reload();
+    } finally {
+      setDevLoading(false);
+    }
+  }
+
+  const controls = (
+    <>
+      {canInstall && (
+        <Button variant="outline" size="icon" onClick={install} title={t('install_title')}>
+          <Download className="h-4 w-4" />
+        </Button>
+      )}
+      <Button variant="outline" size="icon" onClick={() => setAboutOpen(true)} title="Acerca de FilamentOS">
+        <Info className="h-4 w-4" />
+      </Button>
+      <ThemeToggle />
+      <LanguageSelector />
+      <CurrencySelector />
+    </>
+  );
+
+  const authControls = user ? (
+    <>
+      <Button onClick={logout} variant="outline" size="icon" title={t('sign_out')}>
+        <LogOut className="h-4 w-4" />
+      </Button>
+      {avatarUrl && (
+        <Avatar className="h-8 w-8 hidden sm:flex">
+          <AvatarImage src={avatarUrl} alt={displayName} />
+          <AvatarFallback>{initials}</AvatarFallback>
+        </Avatar>
+      )}
+    </>
+  ) : isGuest ? (
+    <>
+      <Button onClick={loginWithGoogle} variant="outline" size="sm" className="hidden sm:inline-flex rounded-full font-bold">
+        Iniciar sesión
+      </Button>
+      <Button onClick={loginWithGoogle} variant="outline" size="icon" className="sm:hidden" title="Iniciar sesión">
+        <LogOut className="h-4 w-4" />
+      </Button>
+      <Button
+        onClick={() => { void exitGuest().then(() => { window.location.href = '/'; }); }}
+        variant="ghost"
+        size="icon"
+        title="Salir del modo invitado"
+      >
+        <LogOut className="h-4 w-4" />
+      </Button>
+    </>
+  ) : (
+    <>
+      <Button onClick={loginWithGoogle} variant="outline" size="sm" className="hidden sm:inline-flex">
+        {t('sign_in')}
+      </Button>
+      <Button onClick={loginWithGoogle} variant="outline" size="icon" className="sm:hidden" title={t('sign_in')}>
+        <LogOut className="h-4 w-4" />
+      </Button>
+      {isDevMode && (
+        <Button
+          onClick={handleDevLogin}
+          disabled={devLoading}
+          variant="outline"
+          size="icon"
+          className="border-dashed border-yellow-500/60 text-yellow-500 hover:bg-yellow-500/10 hover:text-yellow-400"
+          title="Dev Login — usuario de seed"
+        >
+          {devLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : <FlaskConical className="h-4 w-4" />}
+        </Button>
+      )}
+    </>
+  );
+
+  return (
+    <>
+      <motion.header
+        initial={{ opacity: 0, y: -10 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ duration: 0.4 }}
+        className="mb-8 rounded-2xl border border-border/70 bg-card/60 p-4 shadow-[0_12px_36px_rgba(2,8,23,0.10)] backdrop-blur-md print:hidden dark:border-white/10 dark:shadow-[0_18px_60px_rgba(0,0,0,0.22)] sm:p-5"
+      >
+        <div className="flex items-center justify-between gap-3">
+          {/* Logo */}
+          <div className="flex items-center gap-3">
+            <img src={logoSrc} alt={t('logo_alt')} width={50} height={50} className="rounded-full shadow-lg border border-gray-200" />
+            <div className="text-left">
+              <h1 className="font-headline text-xl font-bold tracking-tighter text-primary sm:text-2xl md:text-3xl">
+                {t('app_title')}
+              </h1>
+              {isGuest ? (
+                <p className="mt-0.5 inline-flex items-center gap-1.5 rounded-full bg-purple-100 px-2 py-0.5 text-[0.65rem] font-semibold text-purple-700 dark:bg-purple-900/30 dark:text-purple-300">
+                  👀 Modo invitado
+                </p>
+              ) : user ? (
+                <p className="text-xs text-muted-foreground mt-0.5 hidden sm:block">{t('welcome', { name: displayName })}</p>
+              ) : null}
+            </div>
+          </div>
+
+          {/* Desktop controls */}
+          <div className="hidden items-center gap-1.5 sm:gap-2 md:flex">
+            {controls}
+            {authControls}
+          </div>
+
+          {/* Mobile hamburger */}
+          <Button
+            variant="outline"
+            size="icon"
+            className="md:hidden"
+            aria-label={mobileMenuOpen ? 'Cerrar menu' : 'Abrir menu'}
+            onClick={() => setMobileMenuOpen((open) => !open)}
+          >
+            {mobileMenuOpen ? <X className="h-4 w-4" /> : <Menu className="h-4 w-4" />}
+          </Button>
+        </div>
+
+        {/* Mobile menu */}
+        {mobileMenuOpen && (
+          <div className="mt-4 border-t border-border/60 pt-4 md:hidden">
+            <div className="mx-auto flex max-w-sm flex-col items-center gap-4 text-center">
+              <div className="grid w-full grid-cols-3 place-items-center gap-3">
+                <div className="flex w-full justify-center"><ThemeToggle /></div>
+                <div className="flex w-full justify-center"><LanguageSelector /></div>
+                <div className="flex w-full justify-center"><CurrencySelector /></div>
+              </div>
+              <div className={`grid w-full gap-2 ${canInstall ? 'grid-cols-2' : 'grid-cols-1'}`}>
+                {canInstall && (
+                  <Button variant="outline" onClick={install} className="rounded-full font-bold">
+                    <Download className="mr-2 h-4 w-4" />
+                    {t('install_title')}
+                  </Button>
+                )}
+                <Button variant="outline" onClick={() => setAboutOpen(true)} className="rounded-full font-bold">
+                  <Info className="mr-2 h-4 w-4" />
+                  Info
+                </Button>
+              </div>
+              {user ? (
+                <div className="flex w-full flex-col items-center gap-3 rounded-2xl border border-border/60 bg-background/60 px-4 py-4">
+                  {avatarUrl && (
+                    <Avatar className="h-12 w-12">
+                      <AvatarImage src={avatarUrl} alt={displayName} />
+                      <AvatarFallback>{initials}</AvatarFallback>
+                    </Avatar>
+                  )}
+                  <div className="min-w-0 w-full">
+                    <p className="truncate text-sm font-bold text-foreground">{displayName}</p>
+                    <p className="truncate text-xs text-muted-foreground">{t('welcome', { name: displayName })}</p>
+                  </div>
+                  <Button onClick={logout} variant="outline" className="w-full rounded-full font-bold">
+                    <LogOut className="mr-2 h-4 w-4" />
+                    {t('sign_out')}
+                  </Button>
+                </div>
+              ) : isGuest ? (
+                <div className="flex flex-col gap-2 w-full">
+                  <Button onClick={loginWithGoogle} variant="outline" className="w-full rounded-full font-bold">
+                    {t('sign_in')}
+                  </Button>
+                  <Button
+                    onClick={() => { void exitGuest().then(() => { window.location.href = '/'; }); }}
+                    variant="ghost"
+                    className="w-full rounded-full font-bold"
+                  >
+                    <LogOut className="mr-2 h-4 w-4" />
+                    Salir del modo invitado
+                  </Button>
+                </div>
+              ) : (
+                <div className="flex flex-col gap-2 w-full">
+                  <Button onClick={loginWithGoogle} variant="outline" className="w-full rounded-full font-bold">
+                    {t('sign_in')}
+                  </Button>
+                  {isDevMode && (
+                    <Button
+                      onClick={handleDevLogin}
+                      disabled={devLoading}
+                      variant="outline"
+                      className="w-full rounded-full border-dashed border-yellow-500/60 font-bold text-yellow-500 hover:bg-yellow-500/10"
+                    >
+                      {devLoading ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <FlaskConical className="mr-2 h-4 w-4" />}
+                      Dev Login
+                    </Button>
+                  )}
+                </div>
+              )}
+            </div>
+          </div>
+        )}
+
+        {isGuest && (
+          <div className="mt-4 rounded-2xl border border-purple-300/40 bg-gradient-to-r from-purple-500/12 via-fuchsia-500/10 to-indigo-500/12 px-4 py-3 text-sm font-semibold text-purple-800 dark:text-purple-200">
+            Estás en modo invitado. Crea una cuenta gratuita para guardar tus proyectos.
+          </div>
+        )}
+      </motion.header>
+
+      <AboutModal open={aboutOpen} onOpenChange={setAboutOpen} />
+    </>
+  );
+}
