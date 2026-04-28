@@ -11,6 +11,7 @@ export interface StatsFilters {
   status: string;     // 'all' or lifecycle status
   granularity: Granularity;
   preset: DatePreset | 'custom';
+  source: 'all' | 'tracker' | 'calculator';
 }
 
 export interface StatsSummary {
@@ -61,3 +62,23 @@ export interface StatsExportRow {
   cost: number;
   hours: number;
 }
+
+/** Individual piece detail returned by /api/stats/pieces */
+export interface StatsPieceDetail {
+  id: string;
+  name: string;
+  label: string;
+  projectTitle: string;
+  projectId: string;
+  status: string;
+  totalGrams: number;
+  totalCost: number;
+  totalSecs: number;
+  date: string;
+  source: string;
+}
+
+export interface StatsPiecesResponse {
+  pieces: StatsPieceDetail[];
+}
+

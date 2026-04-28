@@ -105,7 +105,6 @@ export function StatsFilterBar({ filters, onFiltersChange, projects }: StatsFilt
           <DatePicker
             value={filters.from}
             onChange={handleFromChange}
-            className="h-8 text-sm"
           />
         </div>
         <div className="flex flex-col gap-1.5">
@@ -113,7 +112,6 @@ export function StatsFilterBar({ filters, onFiltersChange, projects }: StatsFilt
           <DatePicker
             value={filters.to}
             onChange={handleToChange}
-            className="h-8 text-sm"
           />
         </div>
         <div className="flex flex-col gap-1.5">
@@ -145,7 +143,7 @@ export function StatsFilterBar({ filters, onFiltersChange, projects }: StatsFilt
         </div>
         <div className="flex flex-col gap-1.5">
           <Label className="text-xs text-muted-foreground">{t('stats_filter_status')}</Label>
-          <Select value={filters.status} onValueChange={handleStatusChange}>
+          <Select value={filters.status} onValueChange={(val) => onFiltersChange({ ...filters, status: val })}>
             <SelectTrigger className="h-8 text-sm">
               <SelectValue />
             </SelectTrigger>
@@ -156,6 +154,20 @@ export function StatsFilterBar({ filters, onFiltersChange, projects }: StatsFilt
               <SelectItem value="post_processed">{t('tracker.status.postProcessed')}</SelectItem>
               <SelectItem value="delivered">{t('tracker.status.delivered')}</SelectItem>
               <SelectItem value="failed">{t('tracker.status.failed')}</SelectItem>
+            </SelectContent>
+          </Select>
+        </div>
+
+        <div className="flex flex-col gap-1.5">
+          <Label className="text-xs text-muted-foreground">{t('stats_filter_source') ?? 'Origen'}</Label>
+          <Select value={filters.source} onValueChange={(val: any) => onFiltersChange({ ...filters, source: val })}>
+            <SelectTrigger className="h-8 text-sm w-32">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">{t('tracker.filter.all')}</SelectItem>
+              <SelectItem value="tracker">Bitácora</SelectItem>
+              <SelectItem value="calculator">Calculadora</SelectItem>
             </SelectContent>
           </Select>
         </div>
