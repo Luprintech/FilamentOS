@@ -1,6 +1,8 @@
 
+// FilamentOS Calculator Form
 import React, { useRef, useState } from "react";
 import { useFieldArray, type UseFormReturn } from "react-hook-form";
+import { useNavigate } from 'react-router-dom';
 import { type FormData } from "@/lib/schema";
 import { generateId } from "@/lib/utils";
 
@@ -23,17 +25,10 @@ import {
   CardFooter,
   CardTitle,
 } from "@/components/ui/card";
-import {
-  Accordion,
-  AccordionContent,
-  AccordionItem,
-  AccordionTrigger,
-} from "@/components/ui/accordion";
 import { Switch } from "@/components/ui/switch";
 import { Separator } from "@/components/ui/separator";
 import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "@/context/auth-context";
-import { PdfCustomizer } from "@/components/pdf-customizer";
 import { LoginRequiredModal } from "@/components/login-required-modal";
 import { DatePicker } from "@/components/ui/date-picker";
 import { type ProjectData } from "@/features/calculator/api/use-pdf-customization";
@@ -55,6 +50,9 @@ import {
   Info,
   Save,
   FilePlus,
+  AlertCircle,
+  ArrowLeft,
+  ArrowRight,
 
   Plus,
   X,
@@ -64,12 +62,13 @@ import { Import3MFModal, type Import3MFResult } from "@/components/import-3mf-mo
 import { TooltipProvider } from "./ui/tooltip";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "./ui/select";
 import { useTranslation } from "react-i18next";
-import { calculateCostBreakdown } from "@/features/calculator/domain/cost-calculator";
+import { calculateCostBreakdown, type CostCalculations } from "@/features/calculator/domain/cost-calculator";
 import { useCalculatorActions } from "@/features/calculator/model/use-calculator-actions";
 import { useInventory } from "@/features/inventory/api/use-inventory";
 import { cn } from "@/lib/utils";
 import type { Spool } from "@/features/inventory/types";
 import { useCurrency } from "@/context/currency-context";
+import { AnimatePresence, motion } from "framer-motion";
 
 // ── Filament row sub-component ─────────────────────────────────────────────────
 
@@ -125,7 +124,7 @@ function CalcFilamentRow({ form, index, canRemove, activeSpools, currency, onRem
             className="inline-block h-4 w-4 shrink-0 rounded-full border border-border/40 shadow-sm"
             style={{ backgroundColor: colorHex }}
           />
-          <span className="text-[0.72rem] font-bold uppercase tracking-wider text-muted-foreground">
+          <span className="text-xs font-medium text-muted-foreground">
             {t('tracker.filaments.color')} {index + 1}
           </span>
         </div>
@@ -142,12 +141,14 @@ function CalcFilamentRow({ form, index, canRemove, activeSpools, currency, onRem
 
       {/* Mode toggle (only if inventory has spools) */}
       {activeSpools.length > 0 && (
-        <div className="flex gap-1.5">
+        <div className="flex gap-1.5" role="radiogroup" aria-label={t('tracker.filaments.mode', { defaultValue: 'Modo de filamento' })}>
           <button
             type="button"
+            role="radio"
+            aria-checked={mode === 'spool'}
             onClick={() => form.setValue(`filaments.${index}.mode`, 'spool')}
             className={cn(
-              'rounded-full px-3 py-1 text-[0.72rem] font-bold transition-colors border',
+              'rounded-lg px-3 py-1 text-xs font-medium transition-colors border',
               mode === 'spool'
                 ? 'border-primary/40 bg-primary/10 text-primary'
                 : 'border-border/50 bg-transparent text-muted-foreground hover:border-border',
@@ -157,9 +158,11 @@ function CalcFilamentRow({ form, index, canRemove, activeSpools, currency, onRem
           </button>
           <button
             type="button"
+            role="radio"
+            aria-checked={mode === 'manual'}
             onClick={() => form.setValue(`filaments.${index}.mode`, 'manual')}
             className={cn(
-              'rounded-full px-3 py-1 text-[0.72rem] font-bold transition-colors border',
+              'rounded-lg px-3 py-1 text-xs font-medium transition-colors border',
               mode === 'manual'
                 ? 'border-border bg-muted text-foreground'
                 : 'border-border/50 bg-transparent text-muted-foreground hover:border-border',
@@ -173,7 +176,7 @@ function CalcFilamentRow({ form, index, canRemove, activeSpools, currency, onRem
       {/* Spool selector */}
       {mode === 'spool' && activeSpools.length > 0 && (
         <div className="space-y-1">
-          <Label className="text-[0.72rem] font-bold uppercase tracking-wider text-muted-foreground">
+          <Label className="text-xs font-medium text-muted-foreground">
             {t('tracker.filaments.spool')}
           </Label>
           <Select
@@ -199,7 +202,7 @@ function CalcFilamentRow({ form, index, canRemove, activeSpools, currency, onRem
         <div className="grid grid-cols-2 gap-2">
           {/* Filament type */}
           <div className="space-y-1">
-            <Label className="text-[0.72rem] font-bold uppercase tracking-wider text-muted-foreground">
+            <Label className="text-xs font-medium text-muted-foreground">
               {t('cf_filament_type')}
             </Label>
             <Select
@@ -220,7 +223,7 @@ function CalcFilamentRow({ form, index, canRemove, activeSpools, currency, onRem
           </div>
           {/* Color name + hex */}
           <div className="space-y-1">
-            <Label className="text-[0.72rem] font-bold uppercase tracking-wider text-muted-foreground">
+            <Label className="text-xs font-medium text-muted-foreground">
               {t('tracker.filaments.colorName')}
             </Label>
             <Input
@@ -231,7 +234,7 @@ function CalcFilamentRow({ form, index, canRemove, activeSpools, currency, onRem
             />
           </div>
           <div className="space-y-1">
-            <Label className="text-[0.72rem] font-bold uppercase tracking-wider text-muted-foreground">
+            <Label className="text-xs font-medium text-muted-foreground">
               {t('tracker.filaments.colorHex')}
             </Label>
             <div className="flex gap-1.5">
@@ -241,6 +244,7 @@ function CalcFilamentRow({ form, index, canRemove, activeSpools, currency, onRem
                 onChange={e => form.setValue(`filaments.${index}.colorHex`, e.target.value)}
                 className="h-9 w-10 shrink-0 cursor-pointer rounded-[6px] border border-border/60 bg-transparent p-0.5"
                 title={t('tracker.filaments.pickColor')}
+                aria-label={t('tracker.filaments.pickColor')}
               />
               <Input
                 value={colorHex}
@@ -252,7 +256,7 @@ function CalcFilamentRow({ form, index, canRemove, activeSpools, currency, onRem
           </div>
           {/* Brand */}
           <div className="space-y-1">
-            <Label className="text-[0.72rem] font-bold uppercase tracking-wider text-muted-foreground">
+            <Label className="text-xs font-medium text-muted-foreground">
               {t('inventory.brand')} <span className="normal-case font-normal opacity-60">(opt.)</span>
             </Label>
             <Input
@@ -268,7 +272,7 @@ function CalcFilamentRow({ form, index, canRemove, activeSpools, currency, onRem
       {/* Spool price + weight + grams used */}
       <div className="grid grid-cols-1 gap-2 sm:grid-cols-3">
         <div className="space-y-1">
-          <Label className="text-[0.72rem] font-bold uppercase tracking-wider text-muted-foreground">
+          <Label className="text-xs font-medium text-muted-foreground">
             {t('cf_spool_price')}
           </Label>
           <Input
@@ -282,7 +286,7 @@ function CalcFilamentRow({ form, index, canRemove, activeSpools, currency, onRem
           />
         </div>
         <div className="space-y-1">
-          <Label className="text-[0.72rem] font-bold uppercase tracking-wider text-muted-foreground">
+          <Label className="text-xs font-medium text-muted-foreground">
             {t('cf_spool_weight')}
           </Label>
           <div className="relative">
@@ -294,11 +298,11 @@ function CalcFilamentRow({ form, index, canRemove, activeSpools, currency, onRem
               onChange={e => form.setValue(`filaments.${index}.spoolWeight`, Number(e.target.value))}
               className="h-9 text-sm pr-5"
             />
-            <span className="absolute right-2 top-1/2 -translate-y-1/2 text-[0.7rem] text-muted-foreground pointer-events-none">g</span>
+            <span className="absolute right-2 top-1/2 -translate-y-1/2 text-xs text-muted-foreground pointer-events-none">g</span>
           </div>
         </div>
         <div className="space-y-1">
-          <Label className="text-[0.72rem] font-bold uppercase tracking-wider text-muted-foreground">
+          <Label className="text-xs font-medium text-muted-foreground">
             {t('tracker.filaments.grams')}
           </Label>
           <div className="relative">
@@ -311,14 +315,14 @@ function CalcFilamentRow({ form, index, canRemove, activeSpools, currency, onRem
               onChange={e => form.setValue(`filaments.${index}.grams`, Number(e.target.value))}
               className="h-9 text-sm pr-5"
             />
-            <span className="absolute right-2 top-1/2 -translate-y-1/2 text-[0.7rem] text-muted-foreground pointer-events-none">g</span>
+            <span className="absolute right-2 top-1/2 -translate-y-1/2 text-xs text-muted-foreground pointer-events-none">g</span>
           </div>
         </div>
       </div>
 
       {/* Per-row cost preview */}
       {rowCost > 0 && (
-        <div className="text-right text-[0.78rem]">
+        <div className="text-right text-xs">
           <span className="text-muted-foreground">{t('form_cost_preview')}: </span>
           <span className="font-bold text-primary">
             {new Intl.NumberFormat(undefined, { style: 'currency', currency: currency || 'EUR', minimumFractionDigits: 2 }).format(rowCost)}
@@ -329,7 +333,12 @@ function CalcFilamentRow({ form, index, canRemove, activeSpools, currency, onRem
   );
 }
 
-export function CalculatorForm({ form, onProjectSaved }: { form: UseFormReturn<FormData>; onProjectSaved?: () => void }) {
+export function CalculatorForm({ form, onProjectSaved, onCalculationsChange }: {
+  form: UseFormReturn<FormData>;
+  onProjectSaved?: () => void;
+  onCalculationsChange?: (c: import('@/features/calculator/domain/cost-calculator').CostCalculations) => void;
+}) {
+  const navigate = useNavigate();
   const { toast } = useToast();
   const { user, loginWithGoogle, loading: authLoading, isGuest, saveGuestProjectDraft } = useAuth();
   const { t } = useTranslation();
@@ -359,7 +368,7 @@ export function CalculatorForm({ form, onProjectSaved }: { form: UseFormReturn<F
 
   const watchedValues = form.watch();
 
-  // Build filaments input for cost calculator
+  // Calculations are still computed locally here (existing behavior) and emitted upward for the right panel
   const filamentsForCalc = (watchedValues.filaments ?? [])
     .filter(f => Number(f.grams) > 0)
     .map(f => ({
@@ -368,7 +377,7 @@ export function CalculatorForm({ form, onProjectSaved }: { form: UseFormReturn<F
       spoolWeight: Number(f.spoolWeight || 1000),
     }));
 
-  const calculations = calculateCostBreakdown({
+  const calculations: CostCalculations = calculateCostBreakdown({
     printingTimeHours: Number(watchedValues.printingTimeHours || 0),
     printingTimeMinutes: Number(watchedValues.printingTimeMinutes || 0),
     filamentWeight: Number(watchedValues.filamentWeight || 0),
@@ -390,10 +399,51 @@ export function CalculatorForm({ form, onProjectSaved }: { form: UseFormReturn<F
     vatPercentage: Number(watchedValues.vatPercentage || 0),
   });
 
+  React.useEffect(() => {
+    onCalculationsChange?.(calculations);
+  }, [calculations.finalPrice, calculations.subTotal, calculations.profitAmount, calculations.vatAmount]); // eslint-disable-line react-hooks/exhaustive-deps
+
   const [currentStep, setCurrentStep] = useState(0);
-  const [pdfCustomizerOpen, setPdfCustomizerOpen] = useState(false);
+  const totalSteps = 4;
+
   const [import3mfOpen, setImport3mfOpen] = useState(false);
   const [guestSaveModalOpen, setGuestSaveModalOpen] = useState(false);
+
+  const projectDataForPdf: ProjectData = {
+    jobName: watchedValues.jobName,
+    printingTimeHours: Number(watchedValues.printingTimeHours || 0),
+    printingTimeMinutes: Number(watchedValues.printingTimeMinutes || 0),
+    filamentWeight: Number(watchedValues.filamentWeight || 0),
+    spoolWeight: Number(watchedValues.spoolWeight || 1000),
+    spoolPrice: Number(watchedValues.spoolPrice || 0),
+    powerConsumptionWatts: Number(watchedValues.powerConsumptionWatts || 0),
+    energyCostKwh: Number(watchedValues.energyCostKwh || 0),
+    prepTime: Number(watchedValues.prepTime || 0),
+    prepCostPerHour: Number(watchedValues.prepCostPerHour || 0),
+    postProcessingTimeInMinutes: Number(watchedValues.postProcessingTimeInMinutes || 0),
+    postProcessingCostPerHour: Number(watchedValues.postProcessingCostPerHour || 0),
+    includeMachineCosts: watchedValues.includeMachineCosts,
+    printerCost: Number(watchedValues.printerCost || 0),
+    investmentReturnYears: Number(watchedValues.investmentReturnYears || 0),
+    repairCost: Number(watchedValues.repairCost || 0),
+    otherCosts: (watchedValues.otherCosts || []).map(item => ({
+      description: item.name || '',
+      cost: Number(item.price || 0),
+    })),
+    profitPercentage: Number(watchedValues.profitPercentage || 0),
+    vatPercentage: Number(watchedValues.vatPercentage || 0),
+    currency: watchedValues.currency || 'EUR',
+    filamentCost: calculations.filamentCost,
+    electricityCost: calculations.electricityCost,
+    laborCost: calculations.laborCost,
+    machineCost: calculations.currentMachineCost,
+    otherCostsTotal: calculations.otherCostsTotal,
+    subTotal: calculations.subTotal,
+    profitAmount: calculations.profitAmount,
+    priceBeforeVat: calculations.priceBeforeVat,
+    vatAmount: calculations.vatAmount,
+    finalPrice: calculations.finalPrice,
+  };
 
   const {
     isAnalyzing,
@@ -442,8 +492,6 @@ export function CalculatorForm({ form, onProjectSaved }: { form: UseFormReturn<F
       description: t('tmf_applied_msg', { count: result.filaments.length }),
     });
   }
-  const totalSteps = 4;
-
   const wizardSteps = [
     { title: t('cf_details_title'), subtitle: t('cf_details_subtitle') },
     { title: t('wizard_step_material_energy', { defaultValue: `${t('cf_filament_title')} + ${t('cf_electricity_title')}` }), subtitle: t('cf_filament_subtitle') },
@@ -451,19 +499,24 @@ export function CalculatorForm({ form, onProjectSaved }: { form: UseFormReturn<F
     { title: t('cf_final_title'), subtitle: t('cf_final_subtitle') },
   ];
 
-  const visibleAccordionItems =
-    currentStep === 0
-      ? ['job-details']
-      : currentStep === 1
-        ? ['filament-costs', 'electricity-costs']
-        : currentStep === 2
-          ? ['labor-costs']
-          : ['final-price'];
+  const stepFields: Record<number, Array<keyof FormData>> = {
+    0: ['jobName', 'printingTimeHours', 'printingTimeMinutes'],
+    1: ['filaments', 'powerConsumptionWatts', 'energyCostKwh'],
+    2: ['prepTime', 'prepCostPerHour', 'postProcessingTimeInMinutes', 'postProcessingCostPerHour', 'includeMachineCosts', 'printerCost', 'investmentReturnYears', 'repairCost', 'otherCosts'],
+    3: ['profitPercentage', 'vatPercentage'],
+  };
 
-  const goNext = () => setCurrentStep((prev) => Math.min(prev + 1, totalSteps - 1));
+  const goNext = async () => {
+    const fields = stepFields[currentStep] ?? [];
+    const isValid = await form.trigger(fields as any, { shouldFocus: true });
+    if (!isValid) return;
+    setCurrentStep((prev) => Math.min(prev + 1, totalSteps - 1));
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+  };
   const goPrev = () => setCurrentStep((prev) => Math.max(prev - 1, 0));
+
   const inputClass = "h-11";
-  const sectionCardClass = "border-border/60 shadow-sm";
+  const sectionCardClass = "border-border/60 shadow-sm transition-[box-shadow,transform] duration-200 hover:shadow-md hover:-translate-y-[1px]";
   const iconClass = "h-4 w-4";
 
 
@@ -474,9 +527,9 @@ export function CalculatorForm({ form, onProjectSaved }: { form: UseFormReturn<F
           <Card className="border-primary/20 shadow-sm overflow-hidden">
             <CardContent className="p-0">
               {/* Top accent bar */}
-              <div className="h-1 w-full bg-muted">
+              <div className="h-1 w-full bg-muted/60">
                 <div
-                  className="h-1 bg-primary transition-all duration-500 ease-out"
+                  className="h-1 bg-gradient-to-r from-[hsl(var(--challenge-pink))] via-primary to-[hsl(var(--challenge-blue))] transition-all duration-500 ease-out"
                   style={{ width: `${Math.round(((currentStep + 1) / totalSteps) * 100)}%` }}
                 />
               </div>
@@ -509,7 +562,7 @@ export function CalculatorForm({ form, onProjectSaved }: { form: UseFormReturn<F
                         className="flex items-center gap-1.5 group"
                       >
                         <span
-                          className={`flex h-6 w-6 shrink-0 items-center justify-center rounded-full border text-[0.65rem] font-bold transition-all duration-200 ${
+                          className={`flex h-6 w-6 shrink-0 items-center justify-center rounded-full border text-xs font-bold transition-all duration-200 ${
                             isActive
                               ? 'border-primary bg-primary text-primary-foreground shadow-sm'
                               : isComplete
@@ -537,23 +590,41 @@ export function CalculatorForm({ form, onProjectSaved }: { form: UseFormReturn<F
             </CardContent>
           </Card>
 
-          {currentStep === 0 && (
-            <div className="space-y-4">
-              <Accordion type="multiple" className="w-full space-y-4" value={['job-details']}>
+          <AnimatePresence mode="wait">
+            <motion.div
+              key={currentStep}
+              initial={{ opacity: 0, y: 10 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: -10 }}
+              transition={{ duration: 0.22, ease: 'easeOut' }}
+              className="space-y-4"
+            >
+              {currentStep === 0 && (
                 <Card className={sectionCardClass}>
-                  <AccordionItem value="job-details" className="border-b-0">
-                    <AccordionTrigger className="p-6 hover:no-underline">
-                      <div className="text-left">
-                        <CardTitle className="font-headline text-2xl flex items-center gap-2"><FileText className={`${iconClass} text-primary`}/> {t('cf_details_title')}</CardTitle>
-                        <CardDescription>{t('cf_details_subtitle')}</CardDescription>
-                      </div>
-                    </AccordionTrigger>
-                    <AccordionContent className="p-6 pt-0">
+                  <div className="p-6 pb-3">
+                    <CardTitle className="text-xl flex items-center gap-2"><FileText className={`${iconClass} text-primary`}/> {t('cf_details_title')}</CardTitle>
+                    <CardDescription className="mt-1">{t('cf_details_subtitle')}</CardDescription>
+                  </div>
+                  <div className="px-6 pb-6">
                       <div className="space-y-4">
                         <FormField control={form.control} name="jobName" render={({ field }) => (
                           <FormItem>
                             <FormLabel>{t('cf_job_name')} <span className="text-destructive">*</span></FormLabel>
-                            <FormControl><Input className={inputClass} placeholder={t('cf_job_placeholder')} {...field} /></FormControl>
+                            <FormControl>
+                              <div className="relative">
+                                <Input
+                                  className={cn(
+                                    inputClass,
+                                    form.formState.errors.jobName ? 'border-destructive pr-10 focus-visible:ring-destructive/30' : undefined,
+                                  )}
+                                  placeholder={t('cf_job_placeholder')}
+                                  {...field}
+                                />
+                                {form.formState.errors.jobName && (
+                                  <AlertCircle className="pointer-events-none absolute right-3 top-1/2 h-4 w-4 -translate-y-1/2 text-destructive" />
+                                )}
+                              </div>
+                            </FormControl>
                             <FormMessage />
                           </FormItem>
                         )} />
@@ -567,6 +638,26 @@ export function CalculatorForm({ form, onProjectSaved }: { form: UseFormReturn<F
                                 onChange={field.onChange}
                               />
                             </FormControl>
+                            <FormMessage />
+                          </FormItem>
+                        )} />
+                        <FormField control={form.control} name="status" render={({ field }) => (
+                          <FormItem>
+                            <FormLabel>{t('stats_filter_status')}</FormLabel>
+                            <Select onValueChange={field.onChange} defaultValue={field.value} value={field.value}>
+                              <FormControl>
+                                <SelectTrigger className={inputClass}>
+                                  <SelectValue />
+                                </SelectTrigger>
+                              </FormControl>
+                              <SelectContent>
+                                <SelectItem value="pending">{t('tracker.status.pending')}</SelectItem>
+                                <SelectItem value="printed">{t('tracker.status.printed')}</SelectItem>
+                                <SelectItem value="post_processed">{t('tracker.status.postProcessed')}</SelectItem>
+                                <SelectItem value="delivered">{t('tracker.status.delivered')}</SelectItem>
+                                <SelectItem value="failed">{t('tracker.status.failed')}</SelectItem>
+                              </SelectContent>
+                            </Select>
                             <FormMessage />
                           </FormItem>
                         )} />
@@ -591,18 +682,46 @@ export function CalculatorForm({ form, onProjectSaved }: { form: UseFormReturn<F
                         <Separator />
                         <div>
                           <FormLabel>{t('cf_gcode_title')}</FormLabel>
-                          <div className="mt-2 flex flex-wrap gap-2">
-                            <input type="file" ref={fileInputRef} onChange={handleGcodeAnalyze} accept=".gcode" className="hidden" />
-                            <Button type="button" variant="outline" onClick={() => fileInputRef.current?.click()} disabled={isAnalyzing}>
-                              {isAnalyzing ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <UploadCloud className="mr-2 h-4 w-4" />}
-                              {isAnalyzing ? t('cf_gcode_analyzing') : t('cf_gcode_upload')}
-                            </Button>
-                            <Button type="button" variant="outline" onClick={() => setImport3mfOpen(true)} disabled={isAnalyzing}>
-                              <Box className="mr-2 h-4 w-4" />
-                              {t('tmf_btn')}
-                            </Button>
+                          <input type="file" ref={fileInputRef} onChange={handleGcodeAnalyze} accept=".gcode" className="hidden" />
+                          <div className="mt-2 grid grid-cols-2 gap-2.5">
+                            <button
+                              type="button"
+                              onClick={() => fileInputRef.current?.click()}
+                              disabled={isAnalyzing}
+                              className="group flex flex-col items-start gap-2 rounded-xl border border-border/60 bg-muted/30 p-3.5 text-left transition-all hover:border-primary/30 hover:bg-primary/5 disabled:pointer-events-none disabled:opacity-50"
+                            >
+                              <div className="flex h-8 w-8 items-center justify-center rounded-lg border border-border/60 bg-background shadow-sm">
+                                {isAnalyzing
+                                  ? <Loader2 className="h-4 w-4 text-primary animate-spin" />
+                                  : <UploadCloud className="h-4 w-4 text-primary" />
+                                }
+                              </div>
+                              <div>
+                                <p className="text-sm font-semibold text-foreground">
+                                  {isAnalyzing ? t('cf_gcode_analyzing') : 'G-code'}
+                                </p>
+                                <p className="mt-0.5 text-xs text-muted-foreground">
+                                  {t('cf_gcode_hint', { defaultValue: 'Detecta tiempo y filamento' })}
+                                </p>
+                              </div>
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => setImport3mfOpen(true)}
+                              disabled={isAnalyzing}
+                              className="group flex flex-col items-start gap-2 rounded-xl border border-border/60 bg-muted/30 p-3.5 text-left transition-all hover:border-primary/30 hover:bg-primary/5 disabled:pointer-events-none disabled:opacity-50"
+                            >
+                              <div className="flex h-8 w-8 items-center justify-center rounded-lg border border-border/60 bg-background shadow-sm">
+                                <Box className="h-4 w-4 text-primary" />
+                              </div>
+                              <div>
+                                <p className="text-sm font-semibold text-foreground">3MF</p>
+                                <p className="mt-0.5 text-xs text-muted-foreground">
+                                  {t('tmf_hint', { defaultValue: 'Importa desde tu slicer' })}
+                                </p>
+                              </div>
+                            </button>
                           </div>
-                          <p className="text-sm text-muted-foreground mt-2">{t('cf_gcode_hint')}</p>
                           {analysisFeedback.kind !== 'idle' && (
                             <div className={`mt-3 rounded-lg border p-3 text-sm ${
                               analysisFeedback.kind === 'success'
@@ -637,7 +756,6 @@ export function CalculatorForm({ form, onProjectSaved }: { form: UseFormReturn<F
                                     <span className="absolute inset-y-0 right-0 flex items-center pr-3 text-muted-foreground text-sm pointer-events-none">h</span>
                                   </div>
                                 </FormControl>
-                                <FormMessage />
                               </FormItem>
                             )} />
                             <FormField control={form.control} name="printingTimeMinutes" render={({ field }) => (
@@ -648,32 +766,24 @@ export function CalculatorForm({ form, onProjectSaved }: { form: UseFormReturn<F
                                     <span className="absolute inset-y-0 right-0 flex items-center pr-3 text-muted-foreground text-sm pointer-events-none">m</span>
                                   </div>
                                 </FormControl>
-                                <FormMessage />
                               </FormItem>
                             )} />
                           </div>
                           <FormMessage>{form.formState.errors.printingTimeHours?.message}</FormMessage>
                         </div>
                       </div>
-                    </AccordionContent>
-                  </AccordionItem>
+                  </div>
                 </Card>
-              </Accordion>
-            </div>
-          )}
+              )}
 
-          {currentStep === 1 && (
-            <div className="space-y-4">
-              <Accordion type="multiple" className="w-full space-y-4" value={['filament-costs', 'electricity-costs']}>
+              {currentStep === 1 && (
+                <div className="space-y-4">
                 <Card className={sectionCardClass}>
-                  <AccordionItem value="filament-costs" className="border-b-0">
-                    <AccordionTrigger className="p-6 hover:no-underline">
-                      <div className="text-left">
-                        <CardTitle className="font-headline text-2xl flex items-center gap-2"><Palette className={`${iconClass} text-primary`}/> {t('cf_filament_title')}</CardTitle>
-                        <CardDescription>{t('cf_filament_subtitle')}</CardDescription>
-                      </div>
-                    </AccordionTrigger>
-                    <AccordionContent className="p-6 pt-0 space-y-3">
+                  <div className="p-6 pb-3">
+                    <CardTitle className="text-xl flex items-center gap-2"><Palette className={`${iconClass} text-primary`}/> {t('cf_filament_title')}</CardTitle>
+                    <CardDescription className="mt-1">{t('cf_filament_subtitle')}</CardDescription>
+                  </div>
+                  <div className="px-6 pb-6 space-y-3">
                       {filamentFields.map((field, index) => (
                         <CalcFilamentRow
                           key={field.id}
@@ -685,7 +795,7 @@ export function CalculatorForm({ form, onProjectSaved }: { form: UseFormReturn<F
                           onRemove={() => removeFilament(index)}
                         />
                       ))}
-                      <Button type="button" variant="outline" size="sm" className="rounded-full text-xs font-bold"
+                      <Button type="button" variant="outline" size="sm" className="rounded-lg text-xs font-medium"
                         onClick={() => appendFilament({ id: generateId(), mode: 'manual', spoolId: '', filamentType: 'PLA', colorHex: '#888888', colorName: '', brand: '', grams: 0, spoolPrice: 0, spoolWeight: 1000 })}
                       >
                         <Plus className="mr-1.5 h-3.5 w-3.5" />
@@ -696,19 +806,15 @@ export function CalculatorForm({ form, onProjectSaved }: { form: UseFormReturn<F
                         <span>{t('cf_filament_total')}</span>
                         <span className="text-primary">{formatCurrency(calculations.filamentCost)}</span>
                       </div>
-                    </AccordionContent>
-                  </AccordionItem>
+                  </div>
                 </Card>
 
                 <Card className={sectionCardClass}>
-                  <AccordionItem value="electricity-costs" className="border-b-0">
-                    <AccordionTrigger className="p-6 hover:no-underline">
-                      <div className="text-left">
-                        <CardTitle className="font-headline text-2xl flex items-center gap-2"><Zap className={`${iconClass} text-primary`}/> {t('cf_electricity_title')}</CardTitle>
-                        <CardDescription>{t('cf_electricity_subtitle')}</CardDescription>
-                      </div>
-                    </AccordionTrigger>
-                    <AccordionContent className="p-6 pt-0">
+                  <div className="p-6 pb-3">
+                    <CardTitle className="text-xl flex items-center gap-2"><Zap className={`${iconClass} text-primary`}/> {t('cf_electricity_title')}</CardTitle>
+                    <CardDescription className="mt-1">{t('cf_electricity_subtitle')}</CardDescription>
+                  </div>
+                  <div className="px-6 pb-6">
                       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                         <FormField control={form.control} name="powerConsumptionWatts" render={({ field }) => (
                           <FormItem>
@@ -731,24 +837,17 @@ export function CalculatorForm({ form, onProjectSaved }: { form: UseFormReturn<F
                         <span>{t('cf_electricity_total')}</span>
                         <span className="text-primary">{formatCurrency(calculations.electricityCost)}</span>
                       </div>
-                    </AccordionContent>
-                  </AccordionItem>
+                  </div>
                 </Card>
-              </Accordion>
-            </div>
-          )}
+                </div>
+              )}
 
-          {currentStep === 2 && (
-            <div className="space-y-4">
-              <Accordion type="multiple" className="w-full space-y-4" value={['labor-costs']}>
+              {currentStep === 2 && (
                 <Card className={sectionCardClass}>
-                  <AccordionItem value="labor-costs" className="border-b-0">
-                    <AccordionTrigger className="p-6 hover:no-underline">
-                      <div className="text-left">
-                        <CardTitle className="font-headline text-2xl flex items-center gap-2"><Wrench className={`${iconClass} text-primary`}/> {t('cf_labor_title')}</CardTitle>
-                      </div>
-                    </AccordionTrigger>
-                    <AccordionContent className="p-6 pt-0">
+                  <div className="p-6 pb-3">
+                    <CardTitle className="text-xl flex items-center gap-2"><Wrench className={`${iconClass} text-primary`}/> {t('cf_labor_title')}</CardTitle>
+                  </div>
+                  <div className="px-6 pb-6">
                       <div className="space-y-6">
                         <div>
                           <h3 className="font-semibold mb-2">{t('cf_labor_section')}</h3>
@@ -802,145 +901,102 @@ export function CalculatorForm({ form, onProjectSaved }: { form: UseFormReturn<F
                           <Button type="button" variant="outline" size="sm" onClick={() => append({ name: '', price: 0 })} className="mt-2"><PlusCircle className="mr-2 h-4 w-4" /> {t('cf_add_cost')}</Button>
                         </div>
                       </div>
-                    </AccordionContent>
-                  </AccordionItem>
-                </Card>
-              </Accordion>
-            </div>
-          )}
-
-          {currentStep === 3 && (
-            <div className="space-y-4">
-              <Accordion type="multiple" className="w-full space-y-4" value={['final-price']}>
-                <Card className={sectionCardClass}>
-                  <AccordionItem value="final-price" className="border-b-0">
-                    <AccordionTrigger className="p-6 hover:no-underline">
-                      <div className="text-left">
-                        <CardTitle className="font-headline text-2xl flex items-center gap-2"><DollarSign className={`${iconClass} text-primary`}/> {t('cf_final_title')}</CardTitle>
-                        <CardDescription>{t('cf_final_subtitle')}</CardDescription>
-                      </div>
-                    </AccordionTrigger>
-                    <AccordionContent className="p-0">
-                      <CardContent className="pt-6">
-                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                          <FormField control={form.control} name="profitPercentage" render={({ field }) => (<FormItem><FormLabel>{t('cf_profit_pct')}</FormLabel><FormControl><Input className={inputClass} type="number" {...field} /></FormControl></FormItem>)} />
-                          <FormField control={form.control} name="vatPercentage" render={({ field }) => (<FormItem><FormLabel>{t('cf_vat')}</FormLabel><FormControl><Input className={inputClass} type="number" {...field} /></FormControl></FormItem>)} />
-                        </div>
-                      </CardContent>
-                      <CardFooter className="bg-muted/50 p-6 rounded-b-lg">
-                        <div className="w-full space-y-2">
-                          <div className="flex justify-between text-sm"><span>{t('cf_subtotal')}</span><span>{formatCurrency(calculations.subTotal)}</span></div>
-                          <div className="flex justify-between text-sm"><span>{t('cf_profit')}</span><span>{formatCurrency(calculations.profitAmount)}</span></div>
-                          <div className="flex justify-between text-sm"><span>{t('cf_vat_label')}</span><span>{formatCurrency(calculations.vatAmount)}</span></div>
-                          <Separator className="my-2" />
-                          <div className="flex justify-between text-2xl font-bold text-primary">
-                            <span className="font-headline">{t('cf_final_price')}</span>
-                            <span>{formatCurrency(calculations.finalPrice)}</span>
-                          </div>
-                        </div>
-                      </CardFooter>
-                    </AccordionContent>
-                  </AccordionItem>
-                </Card>
-              </Accordion>
-            </div>
-          )}
-          
-          <div className="space-y-3 pt-4">
-            {/* Running total (steps 0–2) */}
-            {currentStep < 3 && calculations.subTotal > 0 && (
-              <div className="flex items-center justify-between rounded-lg border border-primary/20 bg-primary/5 px-4 py-2.5">
-                <div>
-                  <p className="text-xs font-bold uppercase tracking-wider text-muted-foreground">
-                    {t('cf_running_total', { defaultValue: 'Subtotal acumulado' })}
-                  </p>
-                  <p className="text-[0.75rem] text-muted-foreground">
-                    {t('cf_running_total_hint', { defaultValue: 'Sin margen ni IVA' })}
-                  </p>
-                </div>
-                <p className="text-xl font-black text-primary">{formatCurrency(calculations.subTotal)}</p>
-              </div>
-            )}
-
-            {/* PDF Customizer banner — solo en el paso final */}
-            {currentStep === totalSteps - 1 && (user || isGuest) && (
-              <div className="flex items-center justify-between rounded-lg border border-primary/30 bg-primary/5 px-4 py-3">
-                <div className="flex items-center gap-2">
-                  <FileText className="h-4 w-4 text-primary shrink-0" />
-                  <div>
-                    <p className="text-sm font-semibold">{t('pdf_customizer_title', { defaultValue: 'Customizar PDF' })}</p>
-                    <p className="text-xs text-muted-foreground">{t('pdf_customizer_hint', { defaultValue: 'Añade tu logo, colores y genera el presupuesto' })}</p>
                   </div>
-                </div>
-                <Button
-                  type="button"
-                  size="sm"
-                  onClick={() => setPdfCustomizerOpen(true)}
-                  className="gap-1.5 shrink-0"
-                >
-                  {t('pdf_customizer_open', { defaultValue: 'Abrir' })}
-                </Button>
-              </div>
-            )}
+                </Card>
+              )}
 
-            {/* Navigation row */}
-            <div className="flex items-center justify-between gap-3">
-              {/* Left: Atrás */}
+              {currentStep === 3 && (
+                <Card className={sectionCardClass}>
+                  <div className="p-6 pb-3">
+                    <CardTitle className="text-xl flex items-center gap-2"><DollarSign className={`${iconClass} text-primary`}/> {t('cf_final_title')}</CardTitle>
+                    <CardDescription className="mt-1">{t('cf_final_subtitle')}</CardDescription>
+                  </div>
+                  <CardContent className="px-6 pb-4">
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                      <FormField control={form.control} name="profitPercentage" render={({ field }) => (<FormItem><FormLabel>{t('cf_profit_pct')}</FormLabel><FormControl><Input className={inputClass} type="number" {...field} /></FormControl></FormItem>)} />
+                      <FormField control={form.control} name="vatPercentage" render={({ field }) => (<FormItem><FormLabel>{t('cf_vat')}</FormLabel><FormControl><Input className={inputClass} type="number" {...field} /></FormControl></FormItem>)} />
+                    </div>
+                  </CardContent>
+                  <CardFooter className="bg-muted/50 p-6 rounded-b-lg">
+                    <div className="w-full space-y-2">
+                      <div className="flex justify-between text-sm"><span>{t('cf_subtotal')}</span><span>{formatCurrency(calculations.subTotal)}</span></div>
+                      <div className="flex justify-between text-sm"><span>{t('cf_profit')}</span><span>{formatCurrency(calculations.profitAmount)}</span></div>
+                      <div className="flex justify-between text-sm"><span>{t('cf_vat_label')}</span><span>{formatCurrency(calculations.vatAmount)}</span></div>
+                      <Separator className="my-2" />
+                      <div className="flex justify-between text-2xl font-bold text-primary">
+                        <span>{t('cf_final_price')}</span>
+                        <span>{formatCurrency(calculations.finalPrice)}</span>
+                      </div>
+                    </div>
+                  </CardFooter>
+                </Card>
+              )}
+            </motion.div>
+          </AnimatePresence>
+          
+          {/* Navigation + secondary actions — una sola fila */}
+          <div className="pt-4">
+            <div className="flex items-center gap-2">
+              {/* Atrás */}
               <Button
                 type="button"
+                variant="secondary"
                 onClick={goPrev}
-                variant="outline"
                 disabled={currentStep === 0}
-                className="gap-1.5"
+                className="rounded-xl gap-2 shrink-0"
               >
+                <ArrowLeft className="h-4 w-4" />
                 {t('wizard_back', { defaultValue: 'Atrás' })}
               </Button>
 
-              {/* Center: acciones secundarias */}
-              <div className="flex flex-wrap items-center gap-2">
+              {/* Acciones secundarias — centro */}
+              <div className="flex flex-1 items-center justify-center gap-1">
                 <Button
                   type="button"
                   size="sm"
                   variant="outline"
                   onClick={handleSaveProject}
-                  disabled={isSaving}
-                  className="gap-1.5 text-xs"
-                  title={isSaving ? t('cf_saving') : t('cf_save_project')}
+                  loading={isSaving}
+                  className="rounded-xl gap-1.5"
                 >
-                  {isSaving ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Save className="h-3.5 w-3.5" />}
-                  <span className="hidden sm:inline">{isSaving ? t('cf_saving') : t('cf_save_project')}</span>
+                  <Save className="h-4 w-4" />
+                  <span className="hidden sm:inline">{t('cf_save_project')}</span>
                 </Button>
                 <Button
                   type="button"
                   size="sm"
                   variant="outline"
                   onClick={handleNewProject}
-                  className="gap-1.5 text-xs"
-                  title={t('cf_new_project')}
+                  className="rounded-xl gap-1.5"
                 >
-                  <FilePlus className="h-3.5 w-3.5" />
+                  <FilePlus className="h-4 w-4" />
                   <span className="hidden sm:inline">{t('cf_new_project')}</span>
                 </Button>
                 <Button
                   type="button"
                   size="sm"
-                  variant="ghost"
+                  variant="outline"
                   onClick={handleShare}
-                  className="gap-1.5 text-xs"
-                  title={t('cf_share')}
+                  className="rounded-xl gap-1.5"
                 >
-                  <Share2 className="h-3.5 w-3.5" />
-                  <span className="hidden lg:inline">{t('cf_share')}</span>
+                  <Share2 className="h-4 w-4" />
+                  <span className="hidden sm:inline">{t('cf_share')}</span>
                 </Button>
               </div>
 
-              {/* Right: Continuar / placeholder */}
+              {/* Continuar */}
               {currentStep < totalSteps - 1 ? (
-                <Button type="button" onClick={goNext} className="gap-1.5">
-                  {t('wizard_next', { defaultValue: 'Continuar' })} →
+                <Button
+                  type="button"
+                  variant="primary"
+                  onClick={goNext}
+                  className="rounded-xl gap-2 shrink-0"
+                >
+                  {t('wizard_next', { defaultValue: 'Continuar' })}
+                  <ArrowRight className="h-4 w-4" />
                 </Button>
               ) : (
-                <span className="w-[5.5rem]" />
+                <div className="shrink-0 w-[7rem]" />
               )}
             </div>
           </div>
@@ -954,49 +1010,6 @@ export function CalculatorForm({ form, onProjectSaved }: { form: UseFormReturn<F
           spools={spools}
         />
 
-        {/* PDF Customizer Modal */}
-        {(user || isGuest) && (
-          <PdfCustomizer
-            open={pdfCustomizerOpen}
-            onOpenChange={setPdfCustomizerOpen}
-            guestMode={isGuest}
-            projectData={{
-              jobName: watchedValues.jobName,
-              printingTimeHours: Number(watchedValues.printingTimeHours || 0),
-              printingTimeMinutes: Number(watchedValues.printingTimeMinutes || 0),
-              filamentWeight: Number(watchedValues.filamentWeight || 0),
-              spoolWeight: Number(watchedValues.spoolWeight || 1000),
-              spoolPrice: Number(watchedValues.spoolPrice || 0),
-              powerConsumptionWatts: Number(watchedValues.powerConsumptionWatts || 0),
-              energyCostKwh: Number(watchedValues.energyCostKwh || 0),
-              prepTime: Number(watchedValues.prepTime || 0),
-              prepCostPerHour: Number(watchedValues.prepCostPerHour || 0),
-              postProcessingTimeInMinutes: Number(watchedValues.postProcessingTimeInMinutes || 0),
-              postProcessingCostPerHour: Number(watchedValues.postProcessingCostPerHour || 0),
-              includeMachineCosts: watchedValues.includeMachineCosts,
-              printerCost: Number(watchedValues.printerCost || 0),
-              investmentReturnYears: Number(watchedValues.investmentReturnYears || 0),
-              repairCost: Number(watchedValues.repairCost || 0),
-              otherCosts: (watchedValues.otherCosts || []).map(item => ({
-                description: item.name || '',
-                cost: Number(item.price || 0),
-              })),
-              profitPercentage: Number(watchedValues.profitPercentage || 0),
-              vatPercentage: Number(watchedValues.vatPercentage || 0),
-              currency: watchedValues.currency || 'EUR',
-              filamentCost: calculations.filamentCost,
-              electricityCost: calculations.electricityCost,
-              laborCost: calculations.laborCost,
-              machineCost: calculations.currentMachineCost,
-              otherCostsTotal: calculations.otherCostsTotal,
-              subTotal: calculations.subTotal,
-              profitAmount: calculations.profitAmount,
-              priceBeforeVat: calculations.priceBeforeVat,
-              vatAmount: calculations.vatAmount,
-              finalPrice: calculations.finalPrice,
-            }}
-          />
-        )}
       </Form>
       <LoginRequiredModal
         open={guestSaveModalOpen}

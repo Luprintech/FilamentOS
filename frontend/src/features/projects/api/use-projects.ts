@@ -49,13 +49,13 @@ export function useSaveProject() {
     mutationFn: async (data: Omit<Project, 'id' | 'createdAt'>) => {
       return await projectsApi.save(data);
     },
-    onSuccess: (savedProject) => {
+    onSuccess: (_result, data) => {
       // Invalidar y re-fetchear la lista de proyectos
       queryClient.invalidateQueries({ queryKey: ['projects'] });
 
       toast({
         title: 'Proyecto guardado',
-        description: `"${savedProject.jobName}" se ha guardado exitosamente`,
+        description: `"${data.jobName}" se ha guardado exitosamente`,
       });
     },
     onError: (error) => {

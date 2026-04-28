@@ -17,6 +17,25 @@ import { projectsApi, type Project as SavedProject } from '@/features/projects/a
 import { useAuth } from '@/context/auth-context';
 import { useTranslation } from 'react-i18next';
 
+
+const STATUS_STYLES: Record<string, string> = {
+  pending:        'bg-slate-400/15 text-slate-400 border-slate-400/30',
+  printed:        'bg-blue-500/15 text-blue-400 border-blue-500/30',
+  post_processed: 'bg-violet-500/15 text-violet-400 border-violet-500/30',
+  delivered:      'bg-emerald-500/15 text-emerald-400 border-emerald-500/30',
+  failed:         'bg-red-500/15 text-red-400 border-red-500/30',
+};
+
+function StatusBadge({ status, t }: { status: string; t: (k: string) => string }) {
+  const key = status === 'post_processed' ? 'tracker.status.postProcessed' : `tracker.status.${status}`;
+  const style = STATUS_STYLES[status] ?? 'bg-muted/40 text-muted-foreground border-border/50';
+  return (
+    <span className={`inline-flex items-center rounded-full border px-2 py-0.5 text-[0.62rem] font-bold ${style}`}>
+      {t(key as any)}
+    </span>
+  );
+}
+
 interface SavedProjectsDialogProps {
   form: UseFormReturn<FormData>;
   children: React.ReactNode;
@@ -104,7 +123,10 @@ export function SavedProjectsDialog({ form, children }: SavedProjectsDialogProps
                           <ImageIcon className="h-5 w-5" />
                         </div>
                       )}
-                      <span className="font-medium truncate">{project.jobName}</span>
+                      <div>
+                        <span className="font-medium truncate block">{project.jobName}</span>
+                        <StatusBadge status={project.status || 'delivered'} t={t} />
+                      </div>
                     </div>
                     <div className="flex items-center gap-1 flex-shrink-0">
                       <Button variant="ghost" size="icon" onClick={() => handleLoadProject(project)} title={t('load')}>

@@ -141,8 +141,9 @@ export function useCalculatorActions({
     } else {
       // Proyecto nuevo → crear
       saveProjectMutation.mutate(dataToSave, {
-        onSuccess: () => {
-          form.reset(defaultFormValues);
+        onSuccess: (result) => {
+          // Guarda el ID en el form para que el próximo "Guardar" sea una actualización
+          form.setValue('id', result.id, { shouldDirty: false });
           onProjectSaved?.();
         },
       });
