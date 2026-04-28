@@ -54,9 +54,10 @@ backend/data.db-wal
 # archivos subidos por usuarios (logos PDF, etc.)
 backend/uploads/
 
-# scripts de deploy
+# scripts de deploy (contienen IP local del NAS y configuración del servidor)
 deploy.sh
 deploy.bat
+deploy/
 
 # artefactos locales y temporales
 backend/*.log
