@@ -15,6 +15,17 @@ import { XMLParser } from 'fast-xml-parser';
 import nodemailer from 'nodemailer';
 import dns from 'dns';
 import { promisify } from 'util';
+import {
+  createSpoolmanClient,
+  getRemoteBrand,
+  getRemoteMaterial,
+  getRemoteNotes,
+  mapRemoteColorHex,
+  type SpoolmanApiSpool,
+  type SpoolmanStatus,
+  SpoolmanClientError,
+} from './spoolman-client.js';
+import { resolveInventoryLabel } from './inventory-label-resolver.js';
 
 dotenv.config();
 
@@ -194,6 +205,10 @@ db.exec(`
     price        REAL NOT NULL DEFAULT 0,
     notes        TEXT NOT NULL DEFAULT '',
     shop_url     TEXT,
+    spoolman_id  INTEGER,
+    inventory_source TEXT NOT NULL DEFAULT 'local',
+    linked_at    TEXT,
+    last_synced_at TEXT,
     status       TEXT NOT NULL DEFAULT 'active',
     created_at   TEXT DEFAULT (datetime('now')),
     updated_at   TEXT DEFAULT (datetime('now'))
@@ -325,6 +340,9 @@ if (!projectColumns.some(c => c.name === 'total_grams')) {
 if (!projectColumns.some(c => c.name === 'total_secs')) {
   db.exec('ALTER TABLE projects ADD COLUMN total_secs INTEGER NOT NULL DEFAULT 0');
 }
+if (!projectColumns.some(c => c.name === 'status')) {
+  db.exec("ALTER TABLE projects ADD COLUMN status TEXT NOT NULL DEFAULT 'delivered'");
+}
 
 // Ensure filament_inventory columns exist (future-proofing if schema changes)
 const inventoryColumns = db
@@ -343,7 +361,25 @@ if (inventoryColNames.size > 0) {
   if (!inventoryColNames.has('shop_url')) {
     db.exec("ALTER TABLE filament_inventory ADD COLUMN shop_url TEXT");
   }
+  if (!inventoryColNames.has('spoolman_id')) {
+    db.exec('ALTER TABLE filament_inventory ADD COLUMN spoolman_id INTEGER');
+  }
+  if (!inventoryColNames.has('inventory_source')) {
+    db.exec("ALTER TABLE filament_inventory ADD COLUMN inventory_source TEXT NOT NULL DEFAULT 'local'");
+  }
+  if (!inventoryColNames.has('linked_at')) {
+    db.exec('ALTER TABLE filament_inventory ADD COLUMN linked_at TEXT');
+  }
+  if (!inventoryColNames.has('last_synced_at')) {
+    db.exec('ALTER TABLE filament_inventory ADD COLUMN last_synced_at TEXT');
+  }
 }
+
+db.exec(`
+  CREATE UNIQUE INDEX IF NOT EXISTS idx_filament_inventory_user_spoolman
+  ON filament_inventory(user_id, spoolman_id)
+  WHERE spoolman_id IS NOT NULL;
+`);
 
 // Ensure tracker_piece_filaments table exists (migration for existing DBs)
 const trackerFilamentTables = db
@@ -680,11 +716,12 @@ app.post('/api/projects', requireAuth, (req, res) => {
   const id = crypto.randomUUID();
 
   // calculator-stats: extract computed cost fields from request body
-  const { printedAt = null, totalCost = 0, totalGrams = 0, totalSecs = 0 } = req.body as {
+  const { printedAt = null, totalCost = 0, totalGrams = 0, totalSecs = 0, status = 'delivered' } = req.body as {
     printedAt?: string | null;
     totalCost?: number;
     totalGrams?: number;
     totalSecs?: number;
+    status?: string;
   };
 
   // spoolDeductions: Array<{ spoolId: string; grams: number }>
@@ -704,7 +741,7 @@ app.post('/api/projects', requireAuth, (req, res) => {
 
   const saveProject = db.transaction(() => {
     db.prepare(
-      'INSERT INTO projects (id, user_id, job_name, data, printed_at, total_cost, total_grams, total_secs) VALUES (?, ?, ?, ?, ?, ?, ?, ?)'
+      'INSERT INTO projects (id, user_id, job_name, data, printed_at, total_cost, total_grams, total_secs, status) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)'
     ).run(
       id,
       user.id,
@@ -714,6 +751,7 @@ app.post('/api/projects', requireAuth, (req, res) => {
       parseFloat(String(totalCost)) || 0,
       parseFloat(String(totalGrams)) || 0,
       parseInt(String(totalSecs), 10) || 0,
+      status || 'delivered',
     );
 
     for (const d of deductions) {
@@ -741,15 +779,16 @@ app.put('/api/projects/:id', requireAuth, (req, res) => {
   const data = req.body;
 
   // calculator-stats: also update the new columns on edit
-  const { printedAt = null, totalCost = 0, totalGrams = 0, totalSecs = 0 } = req.body as {
+  const { printedAt = null, totalCost = 0, totalGrams = 0, totalSecs = 0, status = 'delivered' } = req.body as {
     printedAt?: string | null;
     totalCost?: number;
     totalGrams?: number;
     totalSecs?: number;
+    status?: string;
   };
 
   const result = db.prepare(
-    'UPDATE projects SET job_name = ?, data = ?, printed_at = ?, total_cost = ?, total_grams = ?, total_secs = ? WHERE id = ? AND user_id = ?'
+    'UPDATE projects SET job_name = ?, data = ?, printed_at = ?, total_cost = ?, total_grams = ?, total_secs = ?, status = ? WHERE id = ? AND user_id = ?'
   ).run(
     data.jobName || 'Sin nombre',
     JSON.stringify(data),
@@ -757,6 +796,7 @@ app.put('/api/projects/:id', requireAuth, (req, res) => {
     parseFloat(String(totalCost)) || 0,
     parseFloat(String(totalGrams)) || 0,
     parseInt(String(totalSecs), 10) || 0,
+    status || 'delivered',
     req.params.id,
     user.id,
   );
@@ -1028,7 +1068,10 @@ app.post('/api/tracker/projects/:projectId/pieces', requireAuth, (req, res) => {
             ).get(f.spoolId, user.id) as { remaining_g: number; price: number; total_grams: number } | undefined;
 
             if (spool) {
-              const pricePerGram = spool.total_grams > 0 ? spool.price / spool.total_grams : project.price_per_kg / 1000;
+              const overridePrice = f.spoolPrice != null ? parseFloat(String(f.spoolPrice)) : NaN;
+              const pricePerGram = !isNaN(overridePrice) && overridePrice > 0
+                ? overridePrice / 1000
+                : spool.total_grams > 0 ? spool.price / spool.total_grams : project.price_per_kg / 1000;
               cost += fg * pricePerGram;
               db.prepare(
                 `UPDATE filament_inventory
@@ -1199,9 +1242,12 @@ app.put('/api/tracker/projects/:projectId/pieces/:id', requireAuth, (req, res) =
       if (f.spoolId) {
         const spool = db.prepare('SELECT price, total_grams FROM filament_inventory WHERE id=?')
           .get(f.spoolId) as { price: number; total_grams: number } | undefined;
-        cost += spool && spool.total_grams > 0
-          ? fg * (spool.price / spool.total_grams)
-          : fg * ((parseFloat(String(f.spoolPrice)) || 20) / 1000);
+        const overridePricePut = f.spoolPrice != null ? parseFloat(String(f.spoolPrice)) : NaN;
+        cost += !isNaN(overridePricePut) && overridePricePut > 0
+          ? fg * (overridePricePut / 1000)
+          : spool && spool.total_grams > 0
+            ? fg * (spool.price / spool.total_grams)
+            : fg * (20 / 1000);
       } else {
         cost += fg * ((parseFloat(String(f.spoolPrice)) || 20) / 1000);
       }
@@ -1285,9 +1331,40 @@ interface DbSpool {
   price: number;
   notes: string;
   shop_url: string | null;
+  spoolman_id: number | null;
+  inventory_source: string;
+  linked_at: string | null;
+  last_synced_at: string | null;
   status: string;
   created_at: string;
   updated_at: string;
+}
+
+interface InventorySpoolResponse {
+  id: string;
+  brand: string;
+  material: string;
+  color: string;
+  colorHex: string;
+  totalGrams: number;
+  remainingG: number;
+  price: number;
+  notes: string;
+  shopUrl: string | null;
+  spoolmanId: number | null;
+  inventorySource: 'local' | 'spoolman';
+  linkedAt: string | null;
+  lastSyncedAt: string | null;
+  status: 'active' | 'finished';
+  createdAt: string;
+  updatedAt: string;
+}
+
+interface RemoteSpoolLookupData extends FilamentData {
+  spoolmanId: number;
+  remainingG: number;
+  totalGrams: number;
+  notes: string;
 }
 
 function mapSpool(r: DbSpool) {
@@ -1302,10 +1379,49 @@ function mapSpool(r: DbSpool) {
     price: r.price,
     notes: r.notes,
     shopUrl: r.shop_url ?? null,
+    spoolmanId: r.spoolman_id ?? null,
+    inventorySource: (r.inventory_source === 'spoolman' ? 'spoolman' : 'local') as 'local' | 'spoolman',
+    linkedAt: r.linked_at ?? null,
+    lastSyncedAt: r.last_synced_at ?? null,
     status: r.status as 'active' | 'finished',
     createdAt: r.created_at,
     updatedAt: r.updated_at,
+  } satisfies InventorySpoolResponse;
+}
+
+function mapRemoteSpool(spool: SpoolmanApiSpool): RemoteSpoolLookupData {
+  const totalGrams = Number(spool.initial_weight ?? 0);
+  const remainingG = Number(spool.remaining_weight ?? 0);
+  return {
+    brand: getRemoteBrand(spool),
+    name: spool.filament?.name?.trim() || getRemoteMaterial(spool),
+    color: null,
+    colorHex: mapRemoteColorHex(spool),
+    material: getRemoteMaterial(spool),
+    diameter: null,
+    weightGrams: totalGrams,
+    printTempMin: null,
+    printTempMax: null,
+    bedTempMin: null,
+    bedTempMax: null,
+    price: Number(spool.price ?? spool.cost ?? 0),
+    spoolmanId: spool.id,
+    remainingG,
+    totalGrams,
+    notes: getRemoteNotes(spool),
   };
+}
+
+function getLinkedSpoolForUser(userId: string, spoolmanId: number): DbSpool | undefined {
+  return db
+    .prepare('SELECT * FROM filament_inventory WHERE user_id = ? AND spoolman_id = ?')
+    .get(userId, spoolmanId) as DbSpool | undefined;
+}
+
+function assertPositiveInteger(value: unknown): number | null {
+  const parsed = Number(value);
+  if (!Number.isInteger(parsed) || parsed <= 0) return null;
+  return parsed;
 }
 
 function validateSpoolBody(body: Record<string, unknown>): string | null {
@@ -1345,6 +1461,124 @@ app.get('/api/inventory/spools', requireAuth, (req, res) => {
   res.json(rows.map(mapSpool));
 });
 
+app.get('/api/inventory/spoolman/status', requireAuth, async (_req, res) => {
+  const client = createSpoolmanClient();
+  const status: SpoolmanStatus = await client.getStatus();
+  res.json(status);
+});
+
+app.post('/api/inventory/spoolman/sync', requireAuth, async (req, res) => {
+  const user = req.user as DbUser;
+  const client = createSpoolmanClient();
+
+  if (!client.configured) {
+    res.status(400).json({ error: 'Spoolman is not configured.' });
+    return;
+  }
+
+  try {
+    const remoteSpools = await client.listSpools();
+    let created = 0;
+    let updated = 0;
+    let skipped = 0;
+    const now = new Date().toISOString();
+
+    const insertStatement = db.prepare(
+      `INSERT INTO filament_inventory
+        (id, user_id, brand, material, color, color_hex, total_grams, remaining_g, price, notes, shop_url, spoolman_id, inventory_source, linked_at, last_synced_at, status, created_at, updated_at)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'spoolman', ?, ?, 'active', ?, ?)`
+    );
+    const updateStatement = db.prepare(
+      `UPDATE filament_inventory
+       SET brand = ?, material = ?, color = ?, color_hex = ?, total_grams = ?, remaining_g = ?, price = ?, notes = ?, spoolman_id = ?, inventory_source = 'spoolman', linked_at = COALESCE(linked_at, ?), last_synced_at = ?, updated_at = ?
+       WHERE id = ? AND user_id = ?`
+    );
+
+    const transaction = db.transaction((spools: SpoolmanApiSpool[]) => {
+      for (const remoteSpool of spools) {
+        const spoolmanId = assertPositiveInteger(remoteSpool.id);
+        if (!spoolmanId) {
+          skipped += 1;
+          continue;
+        }
+
+        const mapped = mapRemoteSpool(remoteSpool);
+        const existing = getLinkedSpoolForUser(user.id, spoolmanId);
+
+        if (existing) {
+          updateStatement.run(
+            mapped.brand,
+            mapped.material,
+            existing.color,
+            mapped.colorHex ?? '#cccccc',
+            mapped.totalGrams,
+            mapped.remainingG,
+            mapped.price ?? 0,
+            mapped.notes,
+            spoolmanId,
+            now,
+            now,
+            now,
+            existing.id,
+            user.id,
+          );
+          updated += 1;
+          continue;
+        }
+
+        insertStatement.run(
+          crypto.randomUUID(),
+          user.id,
+          mapped.brand,
+          mapped.material,
+          mapped.name,
+          mapped.colorHex ?? '#cccccc',
+          mapped.totalGrams,
+          mapped.remainingG,
+          mapped.price ?? 0,
+          mapped.notes,
+          null,
+          spoolmanId,
+          now,
+          now,
+          now,
+          now,
+        );
+        created += 1;
+      }
+    });
+
+    transaction(remoteSpools);
+    res.json({ created, updated, skipped });
+  } catch (error) {
+    const message = error instanceof Error ? error.message : 'Failed to sync Spoolman inventory.';
+    res.status(502).json({ error: message });
+  }
+});
+
+app.get('/api/inventory/spoolman/spools/:spoolmanId', requireAuth, async (req, res) => {
+  const spoolmanId = assertPositiveInteger(req.params.spoolmanId);
+  if (!spoolmanId) {
+    res.status(400).json({ error: 'spoolmanId must be a positive integer.' });
+    return;
+  }
+
+  const client = createSpoolmanClient();
+  if (!client.configured) {
+    res.status(400).json({ error: 'Spoolman is not configured.' });
+    return;
+  }
+
+  try {
+    const remoteSpool = await client.getSpoolById(spoolmanId);
+    res.json({ remoteSpool: mapRemoteSpool(remoteSpool) });
+  } catch (error) {
+    const message = error instanceof Error ? error.message : 'Failed to fetch remote spool.';
+    const status = error instanceof SpoolmanClientError && error.status === 404 ? 404 : 502;
+    res.status(status).json({ error: message });
+  }
+});
+
 // POST /api/inventory/spools — create spool
 app.post('/api/inventory/spools', requireAuth, (req, res) => {
   const user = req.user as DbUser;
@@ -1381,6 +1615,41 @@ app.put('/api/inventory/spools/:id', requireAuth, (req, res) => {
   saveCustomSpoolOptions(user.id, brand, material);
   const spool = db.prepare('SELECT * FROM filament_inventory WHERE id=?').get(req.params.id) as DbSpool;
   res.json(mapSpool(spool));
+});
+
+app.post('/api/inventory/spools/:id/link-spoolman', requireAuth, (req, res) => {
+  const user = req.user as DbUser;
+  const spoolmanId = assertPositiveInteger(req.body?.spoolmanId);
+  if (!spoolmanId) {
+    res.status(400).json({ error: 'spoolmanId must be a positive integer.' });
+    return;
+  }
+
+  const spool = db
+    .prepare('SELECT * FROM filament_inventory WHERE id = ? AND user_id = ?')
+    .get(req.params.id, user.id) as DbSpool | undefined;
+  if (!spool) {
+    res.status(404).json({ error: 'Spool not found.' });
+    return;
+  }
+
+  const conflict = db
+    .prepare('SELECT id FROM filament_inventory WHERE user_id = ? AND spoolman_id = ? AND id != ?')
+    .get(user.id, spoolmanId, req.params.id) as { id: string } | undefined;
+  if (conflict) {
+    res.status(409).json({ error: 'Another spool is already linked to that Spoolman spool.' });
+    return;
+  }
+
+  const now = new Date().toISOString();
+  db.prepare(
+    `UPDATE filament_inventory
+     SET spoolman_id = ?, inventory_source = 'spoolman', linked_at = COALESCE(linked_at, ?), updated_at = ?
+     WHERE id = ? AND user_id = ?`
+  ).run(spoolmanId, now, now, req.params.id, user.id);
+
+  const updated = db.prepare('SELECT * FROM filament_inventory WHERE id = ?').get(req.params.id) as DbSpool;
+  res.json({ spool: mapSpool(updated) });
 });
 
 // DELETE /api/inventory/spools/:id — delete spool
@@ -1939,7 +2208,7 @@ function isValidIsoDate(value: string): boolean {
 // GET /api/stats
 app.get('/api/stats', requireAuth, (req, res) => {
   const user = req.user as DbUser;
-  const { from, to, projectId = 'all', status = 'all', granularity = 'month' } = req.query as StatsQuery;
+  const { from, to, projectId = 'all', status = 'all', granularity = 'month', source = 'all' } = req.query as StatsQuery & { source?: string };
 
   // Validation
   if (from && !isValidIsoDate(from)) {
@@ -1958,67 +2227,98 @@ app.get('/api/stats', requireAuth, (req, res) => {
     res.status(400).json({ error: 'Invalid status filter.' });
     return;
   }
+  if (!['all', 'tracker', 'calculator'].includes(source)) {
+    res.status(400).json({ error: 'Invalid source filter.' });
+    return;
+  }
 
   const fromDate = from ?? '1970-01-01';
   const toDate = to ?? new Date().toISOString().slice(0, 10);
   const toDateEnd = toDate + 'T23:59:59';
 
-  // Summary query — includes both tracker_pieces and calculator projects via UNION ALL
+  const unifiedPiecesCte = `
+    WITH unified_pieces AS (
+      SELECT
+        id,
+        project_id,
+        status,
+        total_grams,
+        total_cost,
+        total_secs,
+        COALESCE(printed_at, created_at) AS eff_date,
+        'tracker' AS source,
+        name,
+        label
+      FROM tracker_pieces
+      WHERE user_id = ?
+      
+      UNION ALL
+      
+      SELECT
+        id,
+        'calc_projects' AS project_id,
+        status,
+        total_grams,
+        total_cost,
+        total_secs,
+        COALESCE(printed_at, created_at) AS eff_date,
+        'calculator' AS source,
+        job_name AS name,
+        '' AS label
+      FROM projects
+      WHERE user_id = ?
+    )
+  `;
+
   const summaryRow = db.prepare(`
+    ${unifiedPiecesCte}
     SELECT
       COUNT(*) AS totalPieces,
       COALESCE(SUM(total_grams), 0) AS totalGrams,
       COALESCE(SUM(total_cost), 0) AS totalCost,
       COALESCE(SUM(total_secs), 0) AS totalSecs
-    FROM (
-      SELECT total_grams, total_cost, total_secs, project_id, status,
-        COALESCE(printed_at, created_at) AS eff_date
-      FROM tracker_pieces
-      WHERE user_id = ?
-      UNION ALL
-      SELECT total_grams, total_cost, total_secs, NULL as project_id, 'delivered' as status,
-        COALESCE(printed_at, created_at) AS eff_date
-      FROM projects
-      WHERE user_id = ?
-    ) AS combined
+    FROM unified_pieces
     WHERE eff_date >= ?
       AND eff_date <= ?
       AND (? = 'all' OR project_id = ?)
       AND (? = 'all' OR status = ?)
-  `).get(user.id, user.id, fromDate, toDateEnd, projectId, projectId, status, status) as {
+      AND (? = 'all' OR source = ?)
+  `).get(user.id, user.id, fromDate, toDateEnd, projectId, projectId, status, status, source, source) as {
     totalPieces: number;
     totalGrams: number;
     totalCost: number;
     totalSecs: number;
   };
 
-  // Project count (distinct projects in range)
   const projectCountRow = db.prepare(`
+    ${unifiedPiecesCte}
     SELECT COUNT(DISTINCT project_id) AS projectCount
-    FROM tracker_pieces
-    WHERE user_id = ?
-      AND COALESCE(printed_at, created_at) >= ?
-      AND COALESCE(printed_at, created_at) <= ?
+    FROM unified_pieces
+    WHERE eff_date >= ?
+      AND eff_date <= ?
       AND (? = 'all' OR project_id = ?)
       AND (? = 'all' OR status = ?)
-  `).get(user.id, fromDate, toDateEnd, projectId, projectId, status, status) as { projectCount: number };
+      AND (? = 'all' OR source = ?)
+      AND project_id != 'calc_projects'
+  `).get(user.id, user.id, fromDate, toDateEnd, projectId, projectId, status, status, source, source) as { projectCount: number };
 
   const avgCostPerPiece = summaryRow.totalPieces > 0
     ? parseFloat((summaryRow.totalCost / summaryRow.totalPieces).toFixed(4))
     : 0;
 
   const statusRows = db.prepare(`
+    ${unifiedPiecesCte}
     SELECT
       status,
       COUNT(*) AS count
-    FROM tracker_pieces
-    WHERE user_id = ?
-      AND COALESCE(printed_at, created_at) >= ?
-      AND COALESCE(printed_at, created_at) <= ?
+    FROM unified_pieces
+    WHERE eff_date >= ?
+      AND eff_date <= ?
       AND (? = 'all' OR project_id = ?)
       AND (? = 'all' OR status = ?)
+      AND (? = 'all' OR source = ?)
     GROUP BY status
-  `).all(user.id, fromDate, toDateEnd, projectId, projectId, status, status) as Array<{
+  `).all(user.id, user.id, fromDate, toDateEnd, projectId, projectId, status, status, source, source) as Array<{
     status: string;
     count: number;
   }>;
@@ -2039,39 +2339,29 @@ app.get('/api/stats', requireAuth, (req, res) => {
     if (row.status === 'failed') byStatus.failed = row.count;
   }
 
-  // Granularity format for strftime
   const strftimeFormat = granularity === 'day'
     ? '%Y-%m-%d'
     : granularity === 'week'
       ? '%Y-W%W'
       : '%Y-%m';
 
-  // Time series query — includes both tracker_pieces and calculator projects via UNION ALL
   const timeSeries = db.prepare(`
+    ${unifiedPiecesCte}
     SELECT
       strftime('${strftimeFormat}', eff_date) AS period,
       COUNT(*) AS pieces,
       COALESCE(SUM(total_grams), 0) AS grams,
       COALESCE(SUM(total_cost), 0) AS cost,
       COALESCE(SUM(total_secs), 0) AS secs
-    FROM (
-      SELECT total_grams, total_cost, total_secs, project_id, status,
-        COALESCE(printed_at, created_at) AS eff_date
-      FROM tracker_pieces
-      WHERE user_id = ?
-      UNION ALL
-      SELECT total_grams, total_cost, total_secs, NULL as project_id, 'delivered' as status,
-        COALESCE(printed_at, created_at) AS eff_date
-      FROM projects
-      WHERE user_id = ?
-    ) AS combined
+    FROM unified_pieces
     WHERE eff_date >= ?
       AND eff_date <= ?
       AND (? = 'all' OR project_id = ?)
       AND (? = 'all' OR status = ?)
+      AND (? = 'all' OR source = ?)
     GROUP BY period
     ORDER BY period ASC
-  `).all(user.id, user.id, fromDate, toDateEnd, projectId, projectId, status, status) as Array<{
+  `).all(user.id, user.id, fromDate, toDateEnd, projectId, projectId, status, status, source, source) as Array<{
     period: string;
     pieces: number;
     grams: number;
@@ -2079,25 +2369,25 @@ app.get('/api/stats', requireAuth, (req, res) => {
     secs: number;
   }>;
 
-  // By-project query
   const byProject = db.prepare(`
+    ${unifiedPiecesCte}
     SELECT
-      tp.project_id AS projectId,
+      up.project_id AS projectId,
       tpr.title AS title,
       COUNT(*) AS pieces,
-      COALESCE(SUM(tp.total_grams), 0) AS grams,
-      COALESCE(SUM(tp.total_cost), 0) AS cost,
-      COALESCE(SUM(tp.total_secs), 0) AS secs
-    FROM tracker_pieces tp
-    LEFT JOIN tracker_projects tpr ON tpr.id = tp.project_id
-    WHERE tp.user_id = ?
-      AND COALESCE(tp.printed_at, tp.created_at) >= ?
-      AND COALESCE(tp.printed_at, tp.created_at) <= ?
-      AND (? = 'all' OR tp.project_id = ?)
-      AND (? = 'all' OR tp.status = ?)
-    GROUP BY tp.project_id
+      COALESCE(SUM(up.total_grams), 0) AS grams,
+      COALESCE(SUM(up.total_cost), 0) AS cost,
+      COALESCE(SUM(up.total_secs), 0) AS secs
+    FROM unified_pieces up
+    LEFT JOIN tracker_projects tpr ON tpr.id = up.project_id
+    WHERE up.eff_date >= ?
+      AND up.eff_date <= ?
+      AND (? = 'all' OR up.project_id = ?)
+      AND (? = 'all' OR up.status = ?)
+      AND (? = 'all' OR up.source = ?)
+    GROUP BY up.project_id
     ORDER BY cost DESC
-  `).all(user.id, fromDate, toDateEnd, projectId, projectId, status, status) as Array<{
+  `).all(user.id, user.id, fromDate, toDateEnd, projectId, projectId, status, status, source, source) as Array<{
     projectId: string;
     title: string | null;
     pieces: number;
@@ -2119,7 +2409,7 @@ app.get('/api/stats', requireAuth, (req, res) => {
     timeSeries,
     byProject: byProject.map((r) => ({
       projectId: r.projectId,
-      title: r.title ?? 'Unknown',
+      title: r.projectId === 'calc_projects' ? 'Calculadora (Varios)' : (r.title ?? 'Unknown'),
       pieces: r.pieces,
       grams: r.grams,
       cost: r.cost,
@@ -2128,7 +2418,108 @@ app.get('/api/stats', requireAuth, (req, res) => {
   });
 });
 
-// ── Analyze 3MF ──────────────────────────────────────────────────────────────
+// GET /api/stats/pieces — detail list for drill-down panel
+app.get('/api/stats/pieces', requireAuth, (req, res) => {
+  const user = req.user as DbUser;
+  const { from, to, projectId = 'all', status = 'all', source = 'all' } = req.query as StatsQuery & { source?: string };
+
+  if (from && !isValidIsoDate(from)) {
+    res.status(400).json({ error: 'Invalid from date.' });
+    return;
+  }
+  if (to && !isValidIsoDate(to)) {
+    res.status(400).json({ error: 'Invalid to date.' });
+    return;
+  }
+  if (!['all', 'tracker', 'calculator'].includes(source)) {
+    res.status(400).json({ error: 'Invalid source filter.' });
+    return;
+  }
+
+  const fromDate  = from ?? '1970-01-01';
+  const toDate    = to ?? new Date().toISOString().slice(0, 10);
+  const toDateEnd = toDate + 'T23:59:59';
+
+  const unifiedPiecesCte = `
+    WITH unified_pieces AS (
+      SELECT
+        id,
+        project_id,
+        status,
+        total_grams,
+        total_cost,
+        total_secs,
+        COALESCE(printed_at, created_at) AS eff_date,
+        'tracker' AS source,
+        name,
+        label
+      FROM tracker_pieces
+      WHERE user_id = ?
+      
+      UNION ALL
+      
+      SELECT
+        id,
+        'calc_projects' AS project_id,
+        status,
+        total_grams,
+        total_cost,
+        total_secs,
+        COALESCE(printed_at, created_at) AS eff_date,
+        'calculator' AS source,
+        job_name AS name,
+        '' AS label
+      FROM projects
+      WHERE user_id = ?
+    )
+  `;
+
+  const pieces = db.prepare(`
+    ${unifiedPiecesCte}
+    SELECT
+      up.id,
+      up.name,
+      up.label,
+      tpr.title AS projectTitle,
+      up.project_id AS projectId,
+      up.status,
+      up.total_grams AS totalGrams,
+      up.total_cost AS totalCost,
+      up.total_secs AS totalSecs,
+      up.eff_date AS date,
+      up.source
+    FROM unified_pieces up
+    LEFT JOIN tracker_projects tpr ON tpr.id = up.project_id
+    WHERE up.eff_date >= ?
+      AND up.eff_date <= ?
+      AND (? = 'all' OR up.project_id = ?)
+      AND (? = 'all' OR up.status = ?)
+      AND (? = 'all' OR up.source = ?)
+    ORDER BY up.eff_date DESC
+    LIMIT 500
+  `).all(user.id, user.id, fromDate, toDateEnd, projectId, projectId, status, status, source, source) as Array<{
+    id: string;
+    name: string;
+    label: string;
+    projectTitle: string | null;
+    projectId: string;
+    status: string;
+    totalGrams: number;
+    totalCost: number;
+    totalSecs: number;
+    date: string;
+    source: string;
+  }>;
+
+  res.json({
+    pieces: pieces.map(p => ({
+      ...p,
+      projectTitle: p.projectId === 'calc_projects' ? 'Calculadora (Varios)' : (p.projectTitle ?? 'Unknown'),
+    }))
+  });
+});
+
+
 app.post('/api/analyze-3mf', upload.single('file'), async (req, res) => {
   if (!req.file) {
     res.status(400).json({ error: 'No se ha proporcionado ningún archivo.' });
@@ -2484,12 +2875,37 @@ app.post('/api/lookup-filament', async (req, res) => {
   // 2. Try Bambu QR parsing
   const bambuData = parseBambuQr(trimmedCode);
   if (bambuData) {
-    res.json({ found: true, source: 'bambu' as const, data: { ...emptyData, ...bambuData } });
+    res.json({ found: true, source: 'bambu' as const, linked: false, data: { ...emptyData, ...bambuData } });
     return;
   }
 
-  // 3. Not found (Spoolman DB doesn't index by EAN/QR code, users can contribute manually)
-  res.json({ found: false, source: 'manual' as const, data: emptyData });
+  // 3. Resolve configured Spoolman QR labels without guessing commercial codes
+  const resolvedLabel = resolveInventoryLabel(trimmedCode, process.env.SPOOLMAN_BASE_URL);
+  if (resolvedLabel?.provider === 'spoolman') {
+    const client = createSpoolmanClient();
+
+    try {
+      const remoteSpool = await client.getSpoolById(resolvedLabel.spoolmanId);
+      const mappedRemoteSpool = mapRemoteSpool(remoteSpool);
+      const user = req.isAuthenticated() ? (req.user as DbUser) : null;
+      const linkedSpool = user ? getLinkedSpoolForUser(user.id, resolvedLabel.spoolmanId) : undefined;
+
+      res.json({
+        found: true,
+        source: 'spoolman' as const,
+        linked: Boolean(linkedSpool),
+        data: mappedRemoteSpool,
+        ...(linkedSpool ? { spool: mapSpool(linkedSpool) } : {}),
+      });
+      return;
+    } catch {
+      res.json({ found: false, source: 'manual' as const, linked: false, data: emptyData });
+      return;
+    }
+  }
+
+  // 4. Not found (Spoolman DB doesn't index by EAN/QR code, users can contribute manually)
+  res.json({ found: false, source: 'manual' as const, linked: false, data: emptyData });
 });
 
 // ── Community filament DB contribution ───────────────────────────────────────

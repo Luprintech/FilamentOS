@@ -375,7 +375,7 @@ Si tu repo es privado, configura una **deploy key** (clave SSH de solo-lectura a
 ### A.2 — Crear el `.env` de producción
 
 ```bash
-cp deploy/env.production.example backend/.env
+cp backend/.env.example backend/.env
 nano backend/.env
 ```
 
@@ -387,6 +387,15 @@ node -e "console.log(require('crypto').randomBytes(64).toString('hex'))"
 ```
 
 Copia el resultado y pégalo como valor de `SESSION_SECRET`.
+
+Si vas a usar Spoolman en producción, completa también:
+
+```env
+SPOOLMAN_BASE_URL=https://spoolman.tudominio.com
+SPOOLMAN_TIMEOUT_MS=10000
+```
+
+Si NO vas a usar Spoolman, deja `SPOOLMAN_BASE_URL` vacío. Eso lo desactiva sin romper el inventario local.
 
 **Permisos del `.env`** — no lo lea cualquiera:
 
@@ -417,13 +426,15 @@ Guarda. Si no lo haces, el login de Google fallará con `redirect_uri_mismatch`.
 Desde `/opt/filamentos`:
 
 ```bash
-docker compose -f deploy/docker-compose.prod.yml --env-file backend/.env up -d --build
+docker compose --env-file backend/.env up -d --build
 ```
 
 Lo que hace:
 - **build**: primera vez tarda (4-8 min) porque descarga Node Alpine, Chromium, y compila `better-sqlite3`. Las siguientes será instantáneo si no cambias deps.
 - **-d**: detached (en segundo plano).
-- **--env-file backend/.env**: carga las variables (aunque el compose ya apunta ahí, no está de más).
+- **--env-file backend/.env**: carga las variables. `docker-compose.yml` ya usa `env_file`, pero así evitás sorpresas al ejecutar el comando desde otro shell.
+
+El `docker-compose.yml` de este repo deja fijados `NODE_ENV=production` y `DB_PATH=/data/data.db`, y reexpone `SPOOLMAN_BASE_URL` / `SPOOLMAN_TIMEOUT_MS` desde `backend/.env`. O sea: el switch real de Spoolman está en ese `.env`, no en el compose.
 
 Verifica que está arriba:
 
@@ -479,7 +490,7 @@ sudo tail -f /var/log/nginx/filamentos.error.log
 ```bash
 cd /opt/filamentos
 git pull
-docker compose -f deploy/docker-compose.prod.yml --env-file backend/.env up -d --build
+docker compose --env-file backend/.env up -d --build
 ```
 
 Docker reconstruye, arranca el nuevo contenedor y tira el viejo. Downtime suele ser de 5-15 segundos.
@@ -490,7 +501,7 @@ Docker reconstruye, arranca el nuevo contenedor y tira el viejo. Downtime suele 
 cd /opt/filamentos
 git log --oneline -5           # mira el hash anterior
 git checkout COMMIT_HASH
-docker compose -f deploy/docker-compose.prod.yml --env-file backend/.env up -d --build
+docker compose --env-file backend/.env up -d --build
 ```
 
 ### Entrar al contenedor (para diagnosticar)
@@ -505,7 +516,7 @@ docker exec -it filamentos sh
 
 ```bash
 # 1) Parar el contenedor
-docker compose -f deploy/docker-compose.prod.yml down
+docker compose down
 
 # 2) Restaurar la DB (elige el backup que quieras)
 gunzip -c /var/backups/filamentos/data_20260424_033001.db.gz > /tmp/data.db
@@ -517,7 +528,7 @@ docker run --rm -v filamentos_uploads_data:/uploads -v /var/backups/filamentos:/
   sh -c "cd /uploads && rm -rf * && tar xzf /backup/uploads_20260424_033001.tar.gz"
 
 # 4) Arrancar
-docker compose -f deploy/docker-compose.prod.yml --env-file backend/.env up -d
+docker compose --env-file backend/.env up -d
 ```
 
 ---
@@ -535,6 +546,9 @@ No añadiste la nueva URL de callback en Google Cloud Console. Revisa Fase A.3.
 
 **Puppeteer falla al generar PDFs: "Failed to launch the browser process"**  
 Se te olvidó `PUPPETEER_EXECUTABLE_PATH=/usr/bin/chromium-browser` en el `.env`. Corrige, `docker compose restart filamentos`.
+
+**Spoolman aparece como degradado o no conecta**  
+Revisa `SPOOLMAN_BASE_URL` en `backend/.env`. Tiene que apuntar a la URL base real de Spoolman; da igual si escribes con o sin `/api/v1`, FilamentOS lo normaliza. Si la instancia está tras proxy, comprueba también que el VPS pueda resolver ese host y que `SPOOLMAN_TIMEOUT_MS` no sea demasiado agresivo.
 
 **Certbot falla: "DNS problem: NXDOMAIN looking up A for tudominio.com"**  
 El DNS no ha propagado todavía o el registro A está mal. `dig +short tudominio.com` desde tu local debe devolver la IP del VPS.

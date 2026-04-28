@@ -29,11 +29,12 @@ interface FilamentData {
   price: number | null;
 }
 
-type LookupSource = 'bambu' | 'opendb' | 'manual';
+type LookupSource = 'bambu' | 'opendb' | 'manual' | 'spoolman';
 
 interface LookupResult {
   found: boolean;
   source: LookupSource;
+  linked?: boolean;
   data: FilamentData;
 }
 
@@ -225,7 +226,14 @@ export function BarcodeScannerModal({ open, onClose, onFill }: BarcodeScannerMod
     bambu: t('scan_source_bambu'),
     opendb: t('scan_source_opendb'),
     manual: t('scan_source_manual'),
+    spoolman: t('scan_source_spoolman'),
   };
+
+  const helperMessage = result?.source === 'spoolman'
+    ? t('inventory.scanner.spoolmanDetected')
+    : !result?.found && result?.source === 'manual'
+    ? t('inventory.scanner.notLinked')
+    : null;
 
   return (
     <Dialog open={open} onOpenChange={(v) => { if (!v) onClose(); }}>
@@ -336,6 +344,11 @@ export function BarcodeScannerModal({ open, onClose, onFill }: BarcodeScannerMod
               {!result.found && (
                 <p className="text-xs text-muted-foreground pt-1">
                   {t('scan_source_manual')}
+                </p>
+              )}
+              {helperMessage && (
+                <p className="text-xs text-muted-foreground pt-1">
+                  {helperMessage}
                 </p>
               )}
             </div>

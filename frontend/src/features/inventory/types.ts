@@ -1,6 +1,8 @@
 // ── Filament Inventory Types ───────────────────────────────────────────────────
 
 export type SpoolStatus = 'active' | 'finished';
+export type InventorySource = 'local' | 'spoolman';
+export type SpoolmanState = 'unconfigured' | 'connected' | 'degraded';
 
 export interface Spool {
   id: string;
@@ -13,9 +15,45 @@ export interface Spool {
   price: number;
   notes: string;
   shopUrl: string | null;
+  spoolmanId: number | null;
+  inventorySource: InventorySource;
+  linkedAt: string | null;
+  lastSyncedAt: string | null;
   status: SpoolStatus;
   createdAt: string;
   updatedAt: string;
+}
+
+export interface SpoolmanStatus {
+  configured: boolean;
+  endpoint: string | null;
+  state: SpoolmanState;
+  error: string | null;
+}
+
+export interface SpoolmanSyncResult {
+  created: number;
+  updated: number;
+  skipped: number;
+}
+
+export interface SpoolmanRemoteSpool {
+  spoolmanId: number;
+  brand: string;
+  name: string | null;
+  material: string;
+  color: string | null;
+  colorHex: string | null;
+  totalGrams: number;
+  remainingG: number;
+  weightGrams: number | null;
+  diameter: number | null;
+  printTempMin: number | null;
+  printTempMax: number | null;
+  bedTempMin: number | null;
+  bedTempMax: number | null;
+  price: number | null;
+  notes: string;
 }
 
 export interface SpoolInput {

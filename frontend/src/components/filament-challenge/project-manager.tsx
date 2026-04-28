@@ -1,8 +1,9 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useMemo, useState } from 'react';
 import { useForm } from 'react-hook-form';
-import { Search, Target, BarChart3 } from 'lucide-react';
+import { Search, Target, BarChart3, Clock, Weight, Wallet, FolderOpen, LayoutGrid, List, ChevronLeft, ChevronRight, FileText, Pencil, Trash2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import { Label } from '@/components/ui/label';
 import {
   Dialog, DialogContent, DialogHeader, DialogTitle,
@@ -14,7 +15,52 @@ import type { ProjectInput } from './use-filament-storage';
 import { useTranslation } from 'react-i18next';
 import { useCurrency } from '@/context/currency-context';
 import { ImageUpload } from '@/components/ui/image-upload';
+import { GridDensityControl, GRID_DENSITY_OPTIONS, getGridActionMode, getGridColumnsVars, type GridActionMode, type GridDensity } from '@/components/grid-density-control';
 import { compressImage } from '@/lib/utils';
+import { cn } from '@/lib/utils';
+
+// ── Types ──────────────────────────────────────────────────────────────────────
+type ProjectSortMode = 'created-desc' | 'created-asc' | 'name-asc' | 'name-desc' | 'pieces-desc' | 'cost-desc' | 'cost-asc';
+type ProjectViewMode = 'grid' | 'list';
+
+const PAGE_SIZE = 9;
+const GRID_DENSITY_STORAGE_KEY = 'filamentos_tracker_project_grid_density';
+
+const SORT_OPTIONS: [ProjectSortMode, string][] = [
+  ['created-desc', 'pm_sort_newest'],
+  ['created-asc',  'pm_sort_oldest'],
+  ['name-asc',     'pm_sort_nameAsc'],
+  ['name-desc',    'pm_sort_nameDesc'],
+  ['pieces-desc',  'pm_sort_pieces'],
+  ['cost-desc',    'pm_sort_cost'],
+  ['cost-asc',     'pm_sort_cost_asc'],
+];
+
+function loadGridDensity(): GridDensity {
+  if (typeof window === 'undefined') return 'compact';
+  const saved = window.localStorage.getItem(GRID_DENSITY_STORAGE_KEY);
+  return GRID_DENSITY_OPTIONS.includes(saved as GridDensity) ? (saved as GridDensity) : 'compact';
+}
+
+function saveGridDensity(value: GridDensity) {
+  if (typeof window === 'undefined') return;
+  window.localStorage.setItem(GRID_DENSITY_STORAGE_KEY, value);
+}
+
+function sortProjects(projects: FilamentProject[], mode: ProjectSortMode): FilamentProject[] {
+  return [...projects].sort((a, b) => {
+    switch (mode) {
+      case 'name-asc':     return a.title.localeCompare(b.title, undefined, { sensitivity: 'base' });
+      case 'name-desc':    return b.title.localeCompare(a.title, undefined, { sensitivity: 'base' });
+      case 'pieces-desc':  return b.totalPieces - a.totalPieces;
+      case 'cost-desc':    return b.totalCost - a.totalCost;
+      case 'cost-asc':     return a.totalCost - b.totalCost;
+      case 'created-asc':  return new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime();
+      case 'created-desc':
+      default:             return new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime();
+    }
+  });
+}
 
 // ── Constants ──────────────────────────────────────────────────────────────────
 
@@ -168,6 +214,64 @@ function EmptyState({ onCreate }: EmptyStateProps) {
   );
 }
 
+// ── Helper Components ──────────────────────────────────────────────────────────
+
+interface ActionButtonProps {
+  icon: React.ReactNode;
+  label: string;
+  shortLabel?: string;
+  onClick: () => void;
+  variant?: 'outline' | 'default';
+  destructive?: boolean;
+  actionMode: GridActionMode;
+}
+
+function ActionButton({
+  icon,
+  label,
+  shortLabel,
+  onClick,
+  variant = 'outline',
+  destructive = false,
+  actionMode,
+}: ActionButtonProps) {
+  const compact = actionMode === 'compact';
+  const medium = actionMode === 'medium';
+  const content = compact ? icon : (
+    <>
+      {icon}
+      <span>{medium ? (shortLabel ?? label) : label}</span>
+    </>
+  );
+
+  const button = (
+    <Button
+      variant={variant}
+      size="sm"
+      className={cn(
+        'rounded-full font-bold',
+        compact ? 'h-9 w-9 p-0' : 'h-9 px-3',
+        destructive && 'border-destructive/30 bg-destructive/10 text-destructive hover:bg-destructive/20 hover:text-destructive',
+        variant === 'default' && 'challenge-btn-primary font-extrabold'
+      )}
+      onClick={onClick}
+    >
+      <span className={cn('flex items-center gap-1.5', compact && 'justify-center')}>{content}</span>
+    </Button>
+  );
+
+  if (!compact) return button;
+
+  return (
+    <TooltipProvider>
+      <Tooltip>
+        <TooltipTrigger asChild>{button}</TooltipTrigger>
+        <TooltipContent><p>{label}</p></TooltipContent>
+      </Tooltip>
+    </TooltipProvider>
+  );
+}
+
 // ── Main export ────────────────────────────────────────────────────────────────
 
 interface ProjectManagerProps {
@@ -178,47 +282,45 @@ interface ProjectManagerProps {
   onDelete: (id: string) => Promise<void> | void;
   onSelect: (id: string) => void;
   onOpenProject: (id: string) => void;
+  onGeneratePdf?: (project: FilamentProject) => void;
   /** Cuando true, los botones mutantes llaman a onGuestAction en lugar de abrir diálogos */
   guestMode?: boolean;
   onGuestAction?: () => void;
 }
 
 export function ProjectManager({
-  projects, activeProjectId, onCreate, onUpdate, onDelete, onSelect, onOpenProject,
+  projects, activeProjectId, onCreate, onUpdate, onDelete, onSelect, onOpenProject, onGeneratePdf,
   guestMode = false, onGuestAction,
 }: ProjectManagerProps) {
   const { t } = useTranslation();
   const iconClass = 'h-4 w-4';
-  const [createOpen, setCreateOpen]   = useState(false);
-  const [editing, setEditing]         = useState<FilamentProject | null>(null);
+  const [createOpen, setCreateOpen]     = useState(false);
+  const [editing, setEditing]           = useState<FilamentProject | null>(null);
   const [deleteTarget, setDeleteTarget] = useState<FilamentProject | null>(null);
-  const [currentPage, setCurrentPage] = useState(1);
-  const [query, setQuery] = useState('');
+  const [query, setQuery]               = useState('');
+  const [sortMode, setSortMode]         = useState<ProjectSortMode>('created-desc');
+  const [viewMode, setViewMode]         = useState<ProjectViewMode>('grid');
+  const [gridDensity, setGridDensity]   = useState<GridDensity>(loadGridDensity);
+  const [page, setPage]                 = useState(1);
 
-  const pageSize = 6;
-  const filteredProjects = useMemo(
-    () => projects.filter((project) => (`${project.title} ${project.description}`).toLowerCase().includes(query.toLowerCase().trim())),
-    [projects, query],
-  );
-  const totalPages = Math.max(1, Math.ceil(filteredProjects.length / pageSize));
+  React.useEffect(() => {
+    saveGridDensity(gridDensity);
+  }, [gridDensity]);
 
-  const selectedProject =
-    filteredProjects.find((project) => project.id === activeProjectId)
-    ?? projects.find((project) => project.id === activeProjectId)
-    ?? filteredProjects[0]
-    ?? projects[0]
-    ?? null;
+  const filteredProjects = useMemo(() => {
+    const q = query.toLowerCase().trim();
+    const filtered = q
+      ? projects.filter((p) => `${p.title} ${p.description}`.toLowerCase().includes(q))
+      : projects;
+    return sortProjects(filtered, sortMode);
+  }, [projects, query, sortMode]);
 
-  const paginatedProjects = useMemo(() => {
-    const start = (currentPage - 1) * pageSize;
-    return filteredProjects.slice(start, start + pageSize);
-  }, [filteredProjects, currentPage]);
-
-  useEffect(() => {
-    if (currentPage > totalPages) {
-      setCurrentPage(totalPages);
-    }
-  }, [currentPage, totalPages]);
+  const totalPages = Math.max(1, Math.ceil(filteredProjects.length / PAGE_SIZE));
+  const safePage   = Math.min(page, totalPages);
+  const paginated  = useMemo(() => {
+    const start = (safePage - 1) * PAGE_SIZE;
+    return filteredProjects.slice(start, start + PAGE_SIZE);
+  }, [filteredProjects, safePage]);
 
   function handleCreate(input: ProjectInput) {
     onCreate(input);
@@ -237,8 +339,11 @@ export function ProjectManager({
     setDeleteTarget(null);
   }
 
+  const actionMode = viewMode === 'grid' ? getGridActionMode(gridDensity) : 'large';
+
   return (
     <div className="w-full animate-fade-in space-y-5">
+
 
       {/* ── Page header ── */}
       <div className="challenge-hero relative overflow-hidden rounded-[28px] border border-white/[0.10] p-6 sm:p-7">
@@ -271,165 +376,238 @@ export function ProjectManager({
         </div>
       </div>
 
-      {/* ── Content ── */}
-      {projects.length === 0 ? (
-        <EmptyState onCreate={() => setCreateOpen(true)} />
-      ) : (
-        <div className="grid grid-cols-1 gap-4 xl:grid-cols-[1fr_320px]">
-        <div className="space-y-4">
-          {selectedProject && (
-            <>
-              <div className="challenge-panel rounded-[24px] border border-white/[0.10] p-6">
-                {selectedProject.coverImage && (
-                  <div className="mb-5 overflow-hidden rounded-[20px] border border-white/[0.08] bg-black/20">
-                    <img
-                      src={selectedProject.coverImage}
-                      alt={`Portada de ${selectedProject.title}`}
-                      className="h-52 w-full object-cover"
-                    />
-                  </div>
-                )}
-
-                <div className="mb-5 flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
-                  <div>
-                    <h3 className="text-2xl font-black text-foreground">{selectedProject.title}</h3>
-                    {selectedProject.description && (
-                      <p className="mt-1 text-sm text-muted-foreground">{selectedProject.description}</p>
-                    )}
-                  </div>
-                  <div className="rounded-full border border-white/[0.08] bg-white/[0.05] px-3 py-1.5 text-xs font-extrabold text-[hsl(var(--challenge-blue))]">
-                    {selectedProject.totalPieces}/{selectedProject.goal}
-                  </div>
-                </div>
-
-                <div className="mb-5 grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-4">
-                    {[
-                      { label: t('pm_stat_pieces'), value: `${selectedProject.totalPieces} / ${selectedProject.goal}`, color: 'text-[hsl(var(--challenge-pink))]' },
-                      { label: t('pm_stat_time'), value: secsToString(selectedProject.totalSecs), color: 'text-[hsl(var(--challenge-blue))]' },
-                      { label: t('pm_stat_filament'), value: `${selectedProject.totalGrams.toFixed(1)}g`, color: 'text-[hsl(var(--challenge-green))]' },
-                      { label: t('pm_stat_cost'), value: formatCost(selectedProject.totalCost, selectedProject.currency), color: 'text-yellow-400' },
-                    ].map((s) => (
-                    <div key={s.label} className="challenge-stat-card rounded-[18px] border border-white/[0.08] p-4">
-                      <p className="text-[0.74rem] font-bold uppercase tracking-widest text-muted-foreground">{s.label}</p>
-                      <p className={`mt-1.5 text-lg font-black ${s.color}`}>{s.value}</p>
-                    </div>
-                  ))}
-                </div>
-
-                <div className="mb-5 h-2 w-full overflow-hidden rounded-full bg-white/[0.07]">
-                  <div
-                    className="h-full rounded-full transition-all duration-500"
-                    style={{
-                      width: `${selectedProject.goal > 0 ? Math.min(Math.round((selectedProject.totalPieces / selectedProject.goal) * 100), 100) : 0}%`,
-                      background: 'linear-gradient(90deg, hsl(var(--challenge-pink)), hsl(var(--challenge-blue)))',
-                    }}
-                  />
-                </div>
-
-                <Button
-                  className="challenge-btn-primary w-full rounded-full font-extrabold"
-                  onClick={() => onOpenProject(selectedProject.id)}
-                >
-                  {t('pm_open')}
-                </Button>
-              </div>
-            </>
-          )}
-        </div>
-
-        <aside className="challenge-panel rounded-[24px] border border-white/[0.10] p-5 pb-10 lg:max-h-[720px] xl:sticky xl:top-4 xl:h-[760px] xl:max-h-[760px]">
-          <h3 className="mb-4 text-lg font-extrabold text-foreground">{t('pm_saved_series')}</h3>
-          <div className="relative mb-4">
+      {/* ── Controls bar (only when there are projects) ── */}
+      {projects.length > 0 && (
+        <div className="flex flex-wrap items-center gap-2">
+          {/* Search */}
+          <div className="relative min-w-0 flex-1">
             <Search className={`pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground ${iconClass}`} />
             <Input
               value={query}
-              onChange={(event) => {
-                setQuery(event.target.value);
-                setCurrentPage(1);
-              }}
+              onChange={(e) => { setQuery(e.target.value); setPage(1); }}
               placeholder={t('pm_search')}
               className="challenge-input pl-9"
             />
           </div>
-          <div className="flex min-h-[420px] flex-col gap-4 lg:h-[620px] xl:h-full xl:min-h-0">
-          <div className="flex flex-col gap-2.5 lg:min-h-0 lg:flex-1 lg:overflow-y-auto lg:pr-1 xl:gap-3">
-            {paginatedProjects.map((project) => {
-              const progressPct = project.goal > 0 ? Math.min(Math.round((project.totalPieces / project.goal) * 100), 100) : 0;
+
+          {/* Sort */}
+          <select
+            value={sortMode}
+            onChange={(e) => { setSortMode(e.target.value as ProjectSortMode); setPage(1); }}
+            className="h-9 rounded-xl border border-white/[0.10] bg-card/60 px-3 text-xs font-bold text-foreground backdrop-blur-md focus:outline-none focus:ring-1 focus:ring-primary"
+          >
+            {SORT_OPTIONS.map(([value, key]) => (
+              <option key={value} value={value}>{t(key)}</option>
+            ))}
+          </select>
+
+          {/* View toggle */}
+          <div className="flex rounded-xl border border-white/[0.10] bg-card/60 p-0.5">
+            <button
+              type="button"
+              onClick={() => setViewMode('grid')}
+              className={`rounded-lg p-1.5 transition-colors ${viewMode === 'grid' ? 'bg-primary text-primary-foreground' : 'text-muted-foreground hover:text-foreground'}`}
+              title={t('pm_view_grid') ?? 'Cuadrícula'}
+            >
+              <LayoutGrid className="h-4 w-4" />
+            </button>
+            <button
+              type="button"
+              onClick={() => setViewMode('list')}
+              className={`rounded-lg p-1.5 transition-colors ${viewMode === 'list' ? 'bg-primary text-primary-foreground' : 'text-muted-foreground hover:text-foreground'}`}
+              title={t('pm_view_list') ?? 'Lista'}
+            >
+              <List className="h-4 w-4" />
+            </button>
+          </div>
+          {viewMode === 'grid' && (
+            <GridDensityControl
+              density={gridDensity}
+              onChange={setGridDensity}
+              className="ml-auto hidden min-w-[280px] xl:block"
+            />
+          )}
+        </div>
+      )}
+
+      {/* ── Content ── */}
+      {projects.length === 0 ? (
+        <EmptyState onCreate={() => setCreateOpen(true)} />
+      ) : filteredProjects.length === 0 ? (
+        <div className="rounded-[18px] border border-dashed border-white/[0.12] bg-white/[0.02] px-4 py-12 text-center text-sm text-muted-foreground">
+          {t('pm_no_results')}
+        </div>
+      ) : (
+        <>
+        <div
+          className={viewMode === 'grid'
+            ? 'grid grid-cols-1 gap-5 transition-all duration-300 sm:grid-cols-2 xl:[grid-template-columns:repeat(auto-fill,minmax(var(--grid-min-width),1fr))]'
+            : 'flex flex-col gap-3'
+          }
+          style={viewMode === 'grid' ? getGridColumnsVars(gridDensity) : undefined}
+        >
+          {paginated.map((project) => {
+            const progressPct = project.goal > 0
+              ? Math.min(Math.round((project.totalPieces / project.goal) * 100), 100)
+              : 0;
+
+            const metrics = [
+              { icon: <BarChart3 className="h-3.5 w-3.5" />, label: t('pm_stat_pieces'),   value: `${project.totalPieces} / ${project.goal}`,          color: 'text-[hsl(var(--challenge-pink))]' },
+              { icon: <Clock     className="h-3.5 w-3.5" />, label: t('pm_stat_time'),     value: secsToString(project.totalSecs),                       color: 'text-[hsl(var(--challenge-blue))]' },
+              { icon: <Weight    className="h-3.5 w-3.5" />, label: t('pm_stat_filament'), value: `${project.totalGrams.toFixed(1)} g`,                  color: 'text-[hsl(var(--challenge-green))]' },
+              { icon: <Wallet    className="h-3.5 w-3.5" />, label: t('pm_stat_cost'),     value: formatCost(project.totalCost, project.currency),       color: 'text-yellow-400' },
+            ];
+
+            const actions = (
+              <div className="flex flex-wrap items-center gap-2">
+                  <ActionButton
+                    icon={<FolderOpen className="h-4 w-4" />}
+                    label="Abrir proyecto"
+                    shortLabel="Abrir"
+                    onClick={() => onOpenProject(project.id)}
+                    variant="default"
+                    actionMode={actionMode}
+                  />
+                  {onGeneratePdf && (
+                    <ActionButton
+                      icon={<FileText className="h-4 w-4" />}
+                      label="Generar PDF"
+                      shortLabel="PDF"
+                      onClick={() => onGeneratePdf(project)}
+                      actionMode={actionMode}
+                    />
+                  )}
+                  <ActionButton
+                    icon={<Trash2 className="h-4 w-4" />}
+                    label={t('delete')}
+                    shortLabel={t('delete')}
+                    onClick={() => guestMode ? onGuestAction?.() : setDeleteTarget(project)}
+                    destructive
+                    actionMode={actionMode}
+                  />
+              </div>
+            );
+
+            const progressBar = (
+              <div className="h-1.5 w-full overflow-hidden rounded-full bg-white/[0.07]">
+                <div className="h-full rounded-full transition-all duration-500"
+                  style={{ width: `${progressPct}%`, background: 'linear-gradient(90deg, hsl(var(--challenge-pink)), hsl(var(--challenge-blue)))' }} />
+              </div>
+            );
+
+            if (viewMode === 'list') {
               return (
-                <button
-                  key={project.id}
-                  type="button"
-                  onClick={() => onSelect(project.id)}
-                  className={`rounded-[16px] border p-2.5 text-left transition hover:bg-white/[0.06] sm:p-3 ${
-                    selectedProject?.id === project.id
-                      ? 'border-[hsl(var(--challenge-pink))]/40 bg-white/[0.06] shadow-[0_0_0_1px_hsl(var(--challenge-pink)/0.18)]'
-                      : 'border-white/[0.08] bg-white/[0.03]'
-                  }`}
-                >
-                  <div className="flex items-start gap-2.5 sm:gap-3">
-                    {project.coverImage ? (
-                      <img src={project.coverImage} alt={`Portada de ${project.title}`} className="h-12 w-12 shrink-0 rounded-xl object-cover sm:h-14 sm:w-14" />
-                    ) : (
-                      <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-xl bg-white/[0.05] text-[hsl(var(--challenge-blue))] sm:h-14 sm:w-14">
-                        <Target className="h-5 w-5 text-[hsl(var(--challenge-blue))]" />
+                <div key={project.id} className="challenge-panel flex items-center gap-4 rounded-[18px] border border-white/[0.10] bg-white/[0.03] p-4 transition-shadow hover:shadow-[0_4px_20px_rgba(0,0,0,0.15)]">
+                  {/* Thumbnail */}
+                  <div className="relative h-16 w-16 shrink-0 overflow-hidden rounded-[14px] bg-white/[0.05]">
+                    {project.coverImage
+                      ? <img src={project.coverImage} alt={project.title} className="h-full w-full object-cover" />
+                      : <div className="flex h-full w-full items-center justify-center"><Target className="h-6 w-6 text-white/20" /></div>
+                    }
+                  </div>
+
+                  {/* Info */}
+                  <div className="min-w-0 flex-1 space-y-2">
+                    <div className="flex items-start justify-between gap-2">
+                      <div className="min-w-0">
+                        <h3 className="truncate text-sm font-black text-foreground">{project.title}</h3>
+                        {project.description && <p className="truncate text-xs text-muted-foreground">{project.description}</p>}
                       </div>
-                    )}
-                    <div className="min-w-0 flex-1">
-                      <p className="truncate text-[0.82rem] font-extrabold text-foreground sm:text-sm">{project.title}</p>
-                      <p className="text-[0.7rem] text-muted-foreground sm:text-[0.75rem]">
-                        {project.totalPieces}/{project.goal} · {formatCost(project.totalCost, project.currency)}
-                      </p>
-                      <div className="mt-1.5 h-1.5 w-full overflow-hidden rounded-full bg-white/[0.07]">
-                        <div
-                          className="h-full rounded-full"
-                          style={{
-                            width: `${progressPct}%`,
-                            background: 'linear-gradient(90deg, hsl(var(--challenge-pink)), hsl(var(--challenge-blue)))',
-                          }}
-                        />
-                      </div>
+                      <span className="shrink-0 rounded-full border border-white/[0.08] bg-white/[0.05] px-2 py-0.5 text-[0.68rem] font-extrabold text-[hsl(var(--challenge-blue))]">
+                        {progressPct}%
+                      </span>
+                    </div>
+                    {progressBar}
+                    <div className="flex flex-wrap gap-x-4 gap-y-0.5">
+                      {metrics.map((m) => (
+                        <span key={m.label} className={`flex items-center gap-1 text-[0.7rem] font-bold ${m.color}`}>
+                          {m.icon}{m.value}
+                        </span>
+                      ))}
                     </div>
                   </div>
-                </button>
+
+                  {actions}
+                </div>
               );
-            })}
-          </div>
-          {filteredProjects.length === 0 ? (
-            <div className="rounded-[18px] border border-dashed border-white/[0.12] bg-white/[0.02] px-4 py-8 text-center text-sm text-muted-foreground">
-              {t('pm_no_results')}
-            </div>
-          ) : totalPages > 1 && (
-            <div className="mb-3 mt-1 border-t border-white/[0.08] bg-[hsl(var(--card))/0.96] pt-3 pb-1 backdrop-blur-sm xl:sticky xl:bottom-4">
-            <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between sm:gap-2">
-              <Button
-                type="button"
-                variant="outline"
-                size="sm"
-                className="rounded-full px-3 text-xs font-bold"
-                onClick={() => setCurrentPage((page) => Math.max(1, page - 1))}
-                disabled={currentPage === 1}
-              >
-                {t('pm_prev')}
-              </Button>
-              <span className="text-center text-xs font-bold text-muted-foreground">
-                {t('pm_page', { current: currentPage, total: totalPages })}
-              </span>
-              <Button
-                type="button"
-                variant="outline"
-                size="sm"
-                className="rounded-full px-3 text-xs font-bold"
-                onClick={() => setCurrentPage((page) => Math.min(totalPages, page + 1))}
-                disabled={currentPage === totalPages}
-              >
-                {t('pm_next')}
-              </Button>
-            </div>
-            </div>
-          )}
-          </div>
-        </aside>
+            }
+
+            // Grid card
+            return (
+              <div key={project.id} className="challenge-panel group flex h-full min-h-[390px] flex-col rounded-[24px] border border-white/[0.10] bg-white/[0.03] transition-shadow hover:shadow-[0_8px_32px_rgba(0,0,0,0.18)]">
+                {/* Cover */}
+                <div className="relative h-40 overflow-hidden rounded-t-[22px] bg-white/[0.05]">
+                  {project.coverImage
+                    ? <img src={project.coverImage} alt={project.title} className="h-full w-full object-cover transition-transform duration-300 group-hover:scale-[1.03]" />
+                    : <div className="flex h-full w-full items-center justify-center"><Target className="h-10 w-10 text-white/20" /></div>
+                  }
+                  <div className="absolute right-3 top-3 rounded-full border border-white/[0.12] bg-black/50 px-2.5 py-1 text-[0.7rem] font-extrabold text-white backdrop-blur-sm">
+                    {project.totalPieces}/{project.goal}
+                  </div>
+                </div>
+
+                {/* Body */}
+                <div className="flex flex-1 flex-col gap-4 p-5">
+                  <div>
+                    <h3 className="truncate text-base font-black text-foreground">{project.title}</h3>
+                    {project.description && <p className="mt-0.5 line-clamp-2 text-xs text-muted-foreground">{project.description}</p>}
+                  </div>
+
+                  <div className="grid grid-cols-2 gap-2">
+                    {metrics.map((s) => (
+                      <div key={s.label} className="rounded-[14px] border border-white/[0.07] bg-white/[0.03] p-3">
+                        <div className={`mb-0.5 flex items-center gap-1.5 ${s.color}`}>
+                          {s.icon}
+                          <p className="text-[0.68rem] font-bold uppercase tracking-wider text-muted-foreground">{s.label}</p>
+                        </div>
+                        <p className={`text-sm font-black ${s.color}`}>{s.value}</p>
+                      </div>
+                    ))}
+                  </div>
+
+                  <div className="space-y-1">
+                    <div className="flex justify-between text-[0.7rem] font-bold text-muted-foreground">
+                      <span>{t('pm_progress')}</span>
+                      <span>{progressPct}%</span>
+                    </div>
+                    {progressBar}
+                  </div>
+
+                  <div className="mt-auto pt-1">{actions}</div>
+                </div>
+              </div>
+            );
+          })}
         </div>
+
+        {/* ── Pagination ── */}
+        {totalPages > 1 && (
+          <div className="flex items-center justify-between gap-3 rounded-[18px] border border-white/[0.08] bg-white/[0.02] px-4 py-3">
+            <span className="text-xs font-bold text-muted-foreground">
+              {t('pm_page', { current: safePage, total: totalPages })}
+              {' · '}
+              {t('pm_total_projects', { count: filteredProjects.length }) ?? `${filteredProjects.length} proyectos`}
+            </span>
+            <div className="flex gap-1.5">
+              <Button variant="outline" size="icon" className="h-8 w-8 rounded-full"
+                onClick={() => setPage((p) => Math.max(1, p - 1))} disabled={safePage === 1}>
+                <ChevronLeft className="h-4 w-4" />
+              </Button>
+              {Array.from({ length: totalPages }, (_, i) => i + 1).map((n) => (
+                <Button key={n} variant={n === safePage ? 'default' : 'outline'} size="icon"
+                  className="h-8 w-8 rounded-full text-xs font-bold"
+                  onClick={() => setPage(n)}>
+                  {n}
+                </Button>
+              ))}
+              <Button variant="outline" size="icon" className="h-8 w-8 rounded-full"
+                onClick={() => setPage((p) => Math.min(totalPages, p + 1))} disabled={safePage === totalPages}>
+                <ChevronRight className="h-4 w-4" />
+              </Button>
+            </div>
+          </div>
+        )}
+        </>
       )}
 
       {/* ── Create dialog ── */}
@@ -446,6 +624,26 @@ export function ProjectManager({
             onCancel={() => setCreateOpen(false)}
             submitLabel={t('pm_create_btn')}
           />
+        </DialogContent>
+      </Dialog>
+
+      {/* ── Delete dialog ── */}
+      <Dialog open={!!deleteTarget} onOpenChange={(open) => !open && setDeleteTarget(null)}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>{t('tracker_delete_project')}</DialogTitle>
+            <DialogDescription>
+              {t('tracker_delete_project_confirm', { title: deleteTarget?.title ?? '' })}
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter>
+            <DialogClose asChild>
+              <Button variant="outline" className="rounded-full">{t('cancel')}</Button>
+            </DialogClose>
+            <Button variant="destructive" className="rounded-full" onClick={handleDeleteConfirm}>
+              {t('delete')}
+            </Button>
+          </DialogFooter>
         </DialogContent>
       </Dialog>
 

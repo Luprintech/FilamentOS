@@ -1,7 +1,7 @@
 import React from 'react';
 import { useTranslation } from 'react-i18next';
 import { Edit2, Trash2, MinusCircle, CheckCircle, ShoppingCart } from 'lucide-react';
-import { Button } from '@/components/ui/button';
+import { Button, buttonVariants } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
 import type { Spool } from '../types';
 import { isLowStock, getRemainingPercent } from '../types';
@@ -63,6 +63,7 @@ export function SpoolCard({ spool, onEdit, onDelete, onDeduct, onFinish, guestMo
   const percent = getRemainingPercent(spool);
   const lowStock = isLowStock(spool);
   const finished = spool.status === 'finished';
+  const sourceLabel = spool.inventorySource === 'spoolman' ? t('inventory.source.spoolman') : t('inventory.source.local');
 
   const guestTooltip = 'Inicia sesión para gestionar tu inventario';
 
@@ -109,6 +110,9 @@ export function SpoolCard({ spool, onEdit, onDelete, onDeduct, onFinish, guestMo
             {spool.material} · {spool.color}
           </p>
           <div className="mt-1 flex flex-wrap gap-1">
+            <span className="rounded-full border border-border/60 bg-background/70 px-2 py-0.5 text-[10px] font-semibold text-foreground">
+              {sourceLabel}
+            </span>
             {finished && (
               <span className="rounded-full border border-border/60 bg-muted px-2 py-0.5 text-[10px] font-semibold text-muted-foreground">
                 {t('inventory.finished')}
@@ -146,12 +150,19 @@ export function SpoolCard({ spool, onEdit, onDelete, onDeduct, onFinish, guestMo
           {guestBtn(() => onDeduct(spool), <><MinusCircle className="mr-1 h-3.5 w-3.5" />{t('inventory.deduct')}</>)}
           {guestBtn(() => onFinish(spool.id), <><CheckCircle className="mr-1 h-3.5 w-3.5" />{t('inventory.markFinished')}</>)}
           {spool.shopUrl && (
-            <Button size="sm" variant="outline" className="h-7 rounded-full px-2.5 text-xs text-primary hover:text-primary" asChild>
-              <a href={spool.shopUrl} target="_blank" rel="noopener noreferrer" title={t('inventory.buyLink')}>
-                <ShoppingCart className="mr-1 h-3.5 w-3.5" />
-                {t('inventory.buyLink')}
-              </a>
-            </Button>
+            <a
+              href={spool.shopUrl}
+              target="_blank"
+              rel="noopener noreferrer"
+              title={t('inventory.buyLink')}
+              className={cn(
+                buttonVariants({ size: 'sm', variant: 'outline' }),
+                'h-7 rounded-full px-2.5 text-xs text-primary hover:text-primary',
+              )}
+            >
+              <ShoppingCart className="mr-1 h-3.5 w-3.5" />
+              {t('inventory.buyLink')}
+            </a>
           )}
           {guestBtn(() => onEdit(spool), <Edit2 className="h-3.5 w-3.5" />)}
           {guestBtn(

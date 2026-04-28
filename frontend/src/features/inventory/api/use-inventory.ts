@@ -1,9 +1,10 @@
 import { useState, useCallback, useEffect } from 'react';
 import {
   apiGetSpools, apiCreateSpool, apiUpdateSpool, apiDeleteSpool,
-  apiDeductSpool, apiFinishSpool, apiGetCustomOptions, InventoryApiError,
+  apiDeductSpool, apiFinishSpool, apiGetCustomOptions, apiGetSpoolmanStatus,
+  apiSyncSpoolman, apiGetRemoteSpool, apiLinkSpoolman, InventoryApiError,
 } from './inventory-api';
-import type { Spool, SpoolInput } from '../types';
+import type { Spool, SpoolInput, SpoolmanRemoteSpool, SpoolmanStatus, SpoolmanSyncResult } from '../types';
 
 export interface UseInventoryOptions {
   authLoading: boolean;
@@ -14,6 +15,7 @@ export function useInventory({ authLoading, userId }: UseInventoryOptions) {
   const [spools, setSpools] = useState<Spool[]>([]);
   const [customBrands, setCustomBrands] = useState<string[]>([]);
   const [customMaterials, setCustomMaterials] = useState<string[]>([]);
+  const [spoolmanStatus, setSpoolmanStatus] = useState<SpoolmanStatus | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<InventoryApiError | Error | null>(null);
 
@@ -35,8 +37,9 @@ export function useInventory({ authLoading, userId }: UseInventoryOptions) {
   const refresh = useCallback(async () => {
     if (!userId) return;
     try {
-      const data = await apiGetSpools();
+      const [data, status] = await Promise.all([apiGetSpools(), apiGetSpoolmanStatus()]);
       setSpools(data);
+      setSpoolmanStatus(status);
       setError(null);
     } catch (e) {
       setError(e as InventoryApiError | Error);
@@ -49,6 +52,7 @@ export function useInventory({ authLoading, userId }: UseInventoryOptions) {
       setSpools([]);
       setCustomBrands([]);
       setCustomMaterials([]);
+      setSpoolmanStatus(null);
       setError(null);
       setLoading(false);
       return;
@@ -56,12 +60,13 @@ export function useInventory({ authLoading, userId }: UseInventoryOptions) {
 
     let cancelled = false;
     setLoading(true);
-    Promise.all([apiGetSpools(), apiGetCustomOptions()])
-      .then(([spoolsData, customData]) => {
+    Promise.all([apiGetSpools(), apiGetCustomOptions(), apiGetSpoolmanStatus()])
+      .then(([spoolsData, customData, statusData]) => {
         if (!cancelled) {
           setSpools(spoolsData);
           setCustomBrands(customData.brands);
           setCustomMaterials(customData.materials);
+          setSpoolmanStatus(statusData);
           setError(null);
         }
       })
@@ -113,10 +118,30 @@ export function useInventory({ authLoading, userId }: UseInventoryOptions) {
     );
   }, [userId]);
 
+  const syncSpoolman = useCallback(async (): Promise<SpoolmanSyncResult> => {
+    if (!userId) throw new Error('Not authenticated');
+    const result = await apiSyncSpoolman();
+    await refresh();
+    return result;
+  }, [userId, refresh]);
+
+  const getRemoteSpool = useCallback(async (spoolmanId: number): Promise<SpoolmanRemoteSpool> => {
+    if (!userId) throw new Error('Not authenticated');
+    return apiGetRemoteSpool(spoolmanId);
+  }, [userId]);
+
+  const linkSpoolman = useCallback(async (id: string, spoolmanId: number): Promise<Spool> => {
+    if (!userId) throw new Error('Not authenticated');
+    const linked = await apiLinkSpoolman(id, spoolmanId);
+    setSpools((prev) => prev.map((s) => (s.id === id ? linked : s)));
+    return linked;
+  }, [userId]);
+
   return {
     spools,
     customBrands,
     customMaterials,
+    spoolmanStatus,
     loading,
     error,
     refresh,
@@ -125,5 +150,8 @@ export function useInventory({ authLoading, userId }: UseInventoryOptions) {
     deleteSpool,
     deductSpool,
     finishSpool,
+    syncSpoolman,
+    getRemoteSpool,
+    linkSpoolman,
   };
 }

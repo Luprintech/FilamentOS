@@ -1,18 +1,40 @@
-import React, { useState } from 'react';
+import React, { useMemo, useState } from 'react';
 import { Button } from '@/components/ui/button';
-import { ArrowUp, ArrowDown, ExternalLink, GripVertical, List, LayoutGrid, Search, X as XIcon } from 'lucide-react';
+import {
+  GridDensityControl,
+  GRID_DENSITY_OPTIONS,
+  getGridActionMode,
+  getGridColumnsVars,
+  type GridActionMode,
+  type GridDensity,
+} from '@/components/grid-density-control';
+import { ArrowUp, ArrowDown, ExternalLink, GripVertical, List, LayoutGrid, Search, X as XIcon, ChevronLeft, ChevronRight, Pencil, Trash2 } from 'lucide-react';
 import {
   Dialog, DialogContent, DialogHeader, DialogTitle,
   DialogDescription, DialogFooter, DialogClose,
 } from '@/components/ui/dialog';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
+import { cn } from '@/lib/utils';
 import { secsToString, formatCost } from './filament-storage';
 import type { FilamentPiece, FilamentProject, EditingState } from './filament-types';
 import { useTranslation } from 'react-i18next';
 import { formatDisplayDate } from '@/lib/date-formatter';
 
-export type PieceSortMode = 'date-desc' | 'date-asc' | 'name-asc' | 'name-desc';
+export type PieceSortMode = 'date-desc' | 'date-asc' | 'name-asc' | 'name-desc' | 'cost-desc' | 'cost-asc';
 export type PieceViewMode = 'list' | 'grid';
+
+const GRID_DENSITY_STORAGE_KEY = 'filamentos_piece_grid_density';
+
+function loadGridDensity(): GridDensity {
+  if (typeof window === 'undefined') return 'compact';
+  const saved = window.localStorage.getItem(GRID_DENSITY_STORAGE_KEY);
+  return GRID_DENSITY_OPTIONS.includes(saved as GridDensity) ? (saved as GridDensity) : 'compact';
+}
+
+function saveGridDensity(value: GridDensity) {
+  if (typeof window === 'undefined') return;
+  window.localStorage.setItem(GRID_DENSITY_STORAGE_KEY, value);
+}
 
 function getPieceDateValue(piece: FilamentPiece): number | null {
   if (!piece.printedAt) return null;
@@ -22,16 +44,20 @@ function getPieceDateValue(piece: FilamentPiece): number | null {
 
 export function sortPieces(pieces: FilamentPiece[], sortMode: PieceSortMode): FilamentPiece[] {
   return [...pieces].sort((a, b) => {
-    if (sortMode === 'name-asc' || sortMode === 'name-desc') {
-      const direction = sortMode === 'name-asc' ? 1 : -1;
-      return a.name.localeCompare(b.name, undefined, { sensitivity: 'base' }) * direction;
+    switch (sortMode) {
+      case 'name-asc':  return a.name.localeCompare(b.name, undefined, { sensitivity: 'base' });
+      case 'name-desc': return b.name.localeCompare(a.name, undefined, { sensitivity: 'base' });
+      case 'cost-desc': return b.totalCost - a.totalCost;
+      case 'cost-asc':  return a.totalCost - b.totalCost;
+      default: {
+        const aDate = getPieceDateValue(a);
+        const bDate = getPieceDateValue(b);
+        if (aDate === null && bDate === null) return a.orderIndex - b.orderIndex;
+        if (aDate === null) return 1;
+        if (bDate === null) return -1;
+        return sortMode === 'date-desc' ? bDate - aDate : aDate - bDate;
+      }
     }
-    const aDate = getPieceDateValue(a);
-    const bDate = getPieceDateValue(b);
-    if (aDate === null && bDate === null) return a.orderIndex - b.orderIndex;
-    if (aDate === null) return 1;
-    if (bDate === null) return -1;
-    return sortMode === 'date-desc' ? bDate - aDate : aDate - bDate;
   });
 }
 
@@ -48,14 +74,17 @@ interface ChallengePieceListProps {
   onViewChange: (mode: PieceViewMode) => void;
 }
 
-const SORT_OPTIONS = [
-  ['date-desc', 'tracker.sort.newest'],
-  ['date-asc', 'tracker.sort.oldest'],
-  ['name-asc', 'tracker.sort.nameAsc'],
-  ['name-desc', 'tracker.sort.nameDesc'],
-] as const;
+const SORT_OPTIONS: [PieceSortMode, string][] = [
+  ['date-desc',  'tracker.sort.newest'],
+  ['date-asc',   'tracker.sort.oldest'],
+  ['name-asc',   'tracker.sort.nameAsc'],
+  ['name-desc',  'tracker.sort.nameDesc'],
+  ['cost-desc',  'tracker.sort.costDesc'],
+  ['cost-asc',   'tracker.sort.costAsc'],
+];
 
-// ── Placeholder icon for pieces without image ─────────────────────────────────
+// ── Helper components ─────────────────────────────────────────────────────────
+
 function ImagePlaceholder({ className }: { className?: string }) {
   return (
     <div className={`flex items-center justify-center text-muted-foreground/25 ${className ?? ''}`}>
@@ -63,6 +92,62 @@ function ImagePlaceholder({ className }: { className?: string }) {
         <path strokeLinecap="round" strokeLinejoin="round" d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
       </svg>
     </div>
+  );
+}
+
+interface ActionBtnProps {
+  icon: React.ReactNode;
+  label: string;
+  shortLabel?: string;
+  onClick: () => void;
+  disabled?: boolean;
+  destructive?: boolean;
+  actionMode: GridActionMode;
+}
+
+function ActionBtn({
+  icon,
+  label,
+  shortLabel,
+  onClick,
+  disabled,
+  destructive = false,
+  actionMode,
+}: ActionBtnProps) {
+  const compact = actionMode === 'compact';
+  const medium = actionMode === 'medium';
+  const content = compact ? icon : (
+    <>
+      {icon}
+      <span>{medium ? (shortLabel ?? label) : label}</span>
+    </>
+  );
+
+  const button = (
+    <Button
+      size="sm"
+      variant="outline"
+      disabled={disabled}
+      onClick={onClick}
+      className={cn(
+        'rounded-full font-bold',
+        compact ? 'h-8 w-8 p-0' : 'h-8 px-3 text-[0.7rem]',
+        destructive && 'border-destructive/30 bg-destructive/10 text-destructive hover:bg-destructive/20 hover:text-destructive',
+      )}
+    >
+      <span className={cn('flex items-center gap-1.5', compact && 'justify-center')}>{content}</span>
+    </Button>
+  );
+
+  if (!compact) return button;
+
+  return (
+    <TooltipProvider>
+      <Tooltip>
+        <TooltipTrigger asChild>{button}</TooltipTrigger>
+        <TooltipContent><p>{label}</p></TooltipContent>
+      </Tooltip>
+    </TooltipProvider>
   );
 }
 
@@ -75,6 +160,12 @@ export function ChallengePieceList({
   const [draggedId, setDraggedId] = useState<string | null>(null);
   const [dragOverId, setDragOverId] = useState<string | null>(null);
   const [search, setSearch] = useState('');
+  const [page, setPage] = useState(1);
+  const [gridDensity, setGridDensity] = useState<GridDensity>(loadGridDensity);
+
+  const PAGE_SIZE_GRID = 6;
+  const PAGE_SIZE_LIST = 9;
+  const pageSize = viewMode === 'grid' ? PAGE_SIZE_GRID : PAGE_SIZE_LIST;
 
   const sorted = sortPieces(pieces, sortMode);
   const trimmed = search.trim().toLowerCase();
@@ -85,6 +176,13 @@ export function ChallengePieceList({
           p.label.toLowerCase().includes(trimmed),
       )
     : sorted;
+
+  const totalPages = Math.max(1, Math.ceil(filtered.length / pageSize));
+  const safePage   = Math.min(page, totalPages);
+  const paginated  = useMemo(
+    () => filtered.slice((safePage - 1) * pageSize, safePage * pageSize),
+    [filtered, safePage, pageSize],
+  );
 
   function movePiece(id: string, direction: 'up' | 'down') {
     const currentIndex = sorted.findIndex((piece) => piece.id === id);
@@ -132,7 +230,15 @@ export function ChallengePieceList({
     setDeleteTarget(null);
   }
 
+  // Reset to page 1 whenever the visible set changes
+  React.useEffect(() => { setPage(1); }, [search, sortMode, viewMode]);
+
   const isGrid = viewMode === 'grid';
+  const actionMode = getGridActionMode(gridDensity);
+
+  React.useEffect(() => {
+    saveGridDensity(gridDensity);
+  }, [gridDensity]);
 
   function dragProps(pieceId: string) {
     return {
@@ -212,65 +318,50 @@ export function ChallengePieceList({
     <div className="flex flex-col gap-3">
 
       {/* ── Header block ──────────────────────────────────────────────────── */}
-      <div className="rounded-[20px] border border-white/[0.08] bg-white/[0.03] p-4">
-        {/* Title + count */}
-        <div className="mb-3 flex items-start justify-between gap-3">
-          <div>
-            <h3 className="text-base font-extrabold text-foreground">{t('pieces_title')}</h3>
-            <p className="mt-0.5 text-xs text-muted-foreground">
-              {trimmed
-                ? `${filtered.length} / ${pieces.length}`
-                : pieces.length > 0
-                  ? t('pieces_count', { count: pieces.length })
-                  : t('pieces_empty_label')}
-            </p>
-          </div>
+      <div className="rounded-[20px] border border-white/[0.08] bg-white/[0.03] p-4 space-y-3">
+
+        {/* Row 1: title + goal badge */}
+        <div className="flex items-center justify-between gap-3">
+          <h3 className="text-base font-extrabold text-foreground">{t('pieces_title')}</h3>
           <span className="shrink-0 rounded-full border border-white/[0.08] bg-white/[0.05] px-3 py-1 text-xs font-extrabold text-[hsl(var(--challenge-blue))] whitespace-nowrap">
             {pieces.length} / {project.goal}
           </span>
         </div>
 
-        {/* Search bar */}
-        <div className="relative mb-3">
-          <Search className="pointer-events-none absolute left-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-muted-foreground" />
-          <input
-            type="text"
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
-            placeholder={t('tracker.search.placeholder')}
-            className="w-full rounded-[14px] border border-white/[0.08] bg-white/[0.03] py-2 pl-8 pr-8 text-xs text-foreground placeholder:text-muted-foreground focus:border-white/[0.16] focus:outline-none transition-colors"
-          />
-          {search && (
-            <button
-              type="button"
-              onClick={() => setSearch('')}
-              aria-label={t('tracker.search.clear')}
-              className="absolute right-2.5 top-1/2 -translate-y-1/2 text-muted-foreground transition-colors hover:text-foreground"
-            >
-              <XIcon className="h-3.5 w-3.5" />
-            </button>
-          )}
-        </div>
-
-        {/* Controls: sort pills + view toggle */}
-        <div className="flex flex-wrap items-center justify-between gap-2">
-          {/* Sort pills */}
-          <div className="flex flex-wrap gap-1.5">
-            {SORT_OPTIONS.map(([value, labelKey]) => (
+        {/* Row 2: search + sort dropdown + view toggle + density */}
+        <div className="flex flex-wrap items-center gap-2">
+          {/* Search */}
+          <div className="relative min-w-0 flex-1">
+            <Search className="pointer-events-none absolute left-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-muted-foreground" />
+            <input
+              type="text"
+              value={search}
+              onChange={(e) => { setSearch(e.target.value); setPage(1); }}
+              placeholder={t('tracker.search.placeholder')}
+              className="w-full rounded-[14px] border border-border/70 bg-white/[0.04] py-2 pl-8 pr-8 text-xs text-foreground placeholder:text-muted-foreground transition-colors focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/25"
+            />
+            {search && (
               <button
-                key={value}
                 type="button"
-                onClick={() => onSortChange(value)}
-                className={`rounded-full px-2.5 py-1 text-[0.7rem] font-bold transition-colors ${
-                  sortMode === value
-                    ? 'bg-[hsl(var(--challenge-blue))]/20 text-[hsl(var(--challenge-blue))] ring-1 ring-[hsl(var(--challenge-blue))]/40'
-                    : 'border border-white/[0.08] bg-white/[0.03] text-muted-foreground hover:border-white/[0.14] hover:text-foreground'
-                }`}
+                onClick={() => setSearch('')}
+                aria-label={t('tracker.search.clear')}
+                className="absolute right-2.5 top-1/2 -translate-y-1/2 text-muted-foreground transition-colors hover:text-foreground"
               >
-                {t(labelKey)}
+                <XIcon className="h-3.5 w-3.5" />
               </button>
-            ))}
+            )}
           </div>
+
+          {/* Sort dropdown */}
+          <select
+            value={sortMode}
+            onChange={(e) => { onSortChange(e.target.value as PieceSortMode); setPage(1); }}
+            className="h-8 rounded-xl border border-white/[0.08] bg-white/[0.03] px-2.5 text-[0.72rem] font-bold text-foreground focus:outline-none focus:ring-1 focus:ring-[hsl(var(--challenge-blue))]/40"
+          >
+            {SORT_OPTIONS.map(([value, labelKey]) => (
+              <option key={value} value={value}>{t(labelKey)}</option>
+            ))}
+          </select>
 
           {/* View toggle */}
           <div className="flex items-center gap-0.5 rounded-full border border-white/[0.08] bg-black/[0.20] p-1">
@@ -279,11 +370,7 @@ export function ChallengePieceList({
               onClick={() => onViewChange('list')}
               aria-label={t('tracker.view.list')}
               title={t('tracker.view.list')}
-              className={`rounded-full p-1.5 transition-colors ${
-                !isGrid
-                  ? 'bg-white/[0.14] text-foreground shadow-sm'
-                  : 'text-muted-foreground hover:text-foreground'
-              }`}
+              className={`rounded-full p-1.5 transition-colors ${!isGrid ? 'bg-white/[0.14] text-foreground shadow-sm' : 'text-muted-foreground hover:text-foreground'}`}
             >
               <List className="h-3.5 w-3.5" />
             </button>
@@ -292,16 +379,30 @@ export function ChallengePieceList({
               onClick={() => onViewChange('grid')}
               aria-label={t('tracker.view.grid')}
               title={t('tracker.view.grid')}
-              className={`rounded-full p-1.5 transition-colors ${
-                isGrid
-                  ? 'bg-white/[0.14] text-foreground shadow-sm'
-                  : 'text-muted-foreground hover:text-foreground'
-              }`}
+              className={`rounded-full p-1.5 transition-colors ${isGrid ? 'bg-white/[0.14] text-foreground shadow-sm' : 'text-muted-foreground hover:text-foreground'}`}
             >
               <LayoutGrid className="h-3.5 w-3.5" />
             </button>
           </div>
+
+          {isGrid && (
+            <GridDensityControl
+              density={gridDensity}
+              onChange={setGridDensity}
+              className="ml-auto hidden min-w-[280px] xl:block"
+            />
+          )}
         </div>
+
+        {/* Row 3: counter */}
+        <p className="text-[0.72rem] text-muted-foreground">
+          {trimmed
+            ? `${filtered.length} / ${pieces.length} ${t('pieces_title').toLowerCase()}`
+            : pieces.length > 0
+              ? `${pieces.length} ${t('pieces_count_suffix') ?? 'piezas registradas'}`
+              : t('pieces_empty_label')}
+          {totalPages > 1 && ` · ${t('pieces_pagination_label')} ${safePage} ${t('pieces_pagination_of_suffix')} ${totalPages}`}
+        </p>
       </div>
 
       {/* ── Empty state ───────────────────────────────────────────────────── */}
@@ -321,12 +422,15 @@ export function ChallengePieceList({
 
       ) : isGrid ? (
         /* ── Grid view ──────────────────────────────────────────────────── */
-        <div className="grid grid-cols-1 gap-4 pb-8 sm:grid-cols-2">
-          {filtered.map((piece) => (
+        <div
+          className="grid grid-cols-1 gap-4 transition-all duration-300 md:grid-cols-2 xl:[grid-template-columns:repeat(auto-fill,minmax(var(--grid-min-width),1fr))]"
+          style={getGridColumnsVars(gridDensity)}
+        >
+          {paginated.map((piece) => (
             <article
               key={piece.id}
               {...dragProps(piece.id)}
-              className={`group flex flex-col overflow-hidden rounded-[18px] border transition-all ${editingClass(piece.id)} ${dragRing(piece.id)}`}
+              className={`group flex h-full min-h-[360px] flex-col overflow-hidden rounded-[18px] border transition-all ${editingClass(piece.id)} ${dragRing(piece.id)}`}
             >
               {/* Image */}
               <div className="relative h-40 w-full shrink-0 overflow-hidden border-b border-white/[0.05] bg-white/[0.03]">
@@ -393,37 +497,38 @@ export function ChallengePieceList({
                 </p>
 
                 {/* Actions */}
-                <div className="mt-auto flex flex-wrap gap-1 pt-0.5">
-                  <Button
-                    size="sm" variant="outline"
-                    className="h-6 rounded-full px-2 text-[0.65rem] font-bold"
+                <div className="mt-auto flex flex-wrap gap-1.5 pt-1">
+                  <ActionBtn
+                    icon={<ArrowUp className="h-3 w-3" />}
+                    label={t('pieces_move_up')}
+                    shortLabel={t('pieces_move_up')}
                     onClick={() => movePiece(piece.id, 'up')}
                     disabled={sorted[0]?.id === piece.id}
-                  >
-                    <ArrowUp className="h-2.5 w-2.5" />
-                  </Button>
-                  <Button
-                    size="sm" variant="outline"
-                    className="h-6 rounded-full px-2 text-[0.65rem] font-bold"
+                    actionMode={actionMode}
+                  />
+                  <ActionBtn
+                    icon={<ArrowDown className="h-3 w-3" />}
+                    label={t('pieces_move_down')}
+                    shortLabel={t('pieces_move_down')}
                     onClick={() => movePiece(piece.id, 'down')}
                     disabled={sorted[sorted.length - 1]?.id === piece.id}
-                  >
-                    <ArrowDown className="h-2.5 w-2.5" />
-                  </Button>
-                  <Button
-                    size="sm" variant="outline"
-                    className="h-6 flex-1 rounded-full px-2 text-[0.65rem] font-bold"
+                    actionMode={actionMode}
+                  />
+                  <ActionBtn
+                    icon={<Pencil className="h-3 w-3" />}
+                    label={t('pieces_edit')}
+                    shortLabel={t('pieces_edit')}
                     onClick={() => onEdit(piece.id)}
-                  >
-                    {t('pieces_edit')}
-                  </Button>
-                  <Button
-                    size="sm" variant="outline"
-                    className="h-6 flex-1 rounded-full border-destructive/30 bg-destructive/10 px-2 text-[0.65rem] font-bold text-destructive hover:bg-destructive/20 hover:text-destructive"
+                    actionMode={actionMode}
+                  />
+                  <ActionBtn
+                    icon={<Trash2 className="h-3 w-3" />}
+                    label={t('pieces_delete')}
+                    shortLabel={t('delete')}
                     onClick={() => setDeleteTarget(piece)}
-                  >
-                    {t('pieces_delete')}
-                  </Button>
+                    destructive
+                    actionMode={actionMode}
+                  />
                 </div>
               </div>
             </article>
@@ -432,8 +537,8 @@ export function ChallengePieceList({
 
       ) : (
         /* ── List view ──────────────────────────────────────────────────── */
-        <div className="flex flex-col gap-2 pb-8">
-          {filtered.map((piece) => (
+        <div className="flex flex-col gap-2">
+          {paginated.map((piece) => (
             <article
               key={piece.id}
               {...dragProps(piece.id)}
@@ -521,6 +626,44 @@ export function ChallengePieceList({
               </div>
             </article>
           ))}
+        </div>
+      )}
+
+      {/* ── Pagination ───────────────────────────────────────────────────── */}
+      {totalPages > 1 && (
+        <div className="flex items-center justify-between gap-3 rounded-[16px] border border-white/[0.08] bg-white/[0.02] px-4 py-2.5">
+          <span className="text-[0.72rem] font-bold text-muted-foreground">
+            {t('pieces_pagination_label') ?? 'Página'} {safePage} {t('pieces_pagination_of_suffix') ?? 'de'} {totalPages} · {filtered.length} {t('pieces_count_suffix') ?? 'piezas'}
+          </span>
+          <div className="flex items-center gap-1">
+            <Button
+              type="button" variant="outline" size="icon"
+              className="h-7 w-7 rounded-full"
+              onClick={() => setPage((p) => Math.max(1, p - 1))}
+              disabled={safePage === 1}
+            >
+              <ChevronLeft className="h-3.5 w-3.5" />
+            </Button>
+            {Array.from({ length: totalPages }, (_, i) => i + 1).map((n) => (
+              <Button
+                key={n} type="button"
+                variant={n === safePage ? 'default' : 'outline'}
+                size="icon"
+                className="h-7 w-7 rounded-full text-[0.7rem] font-bold"
+                onClick={() => setPage(n)}
+              >
+                {n}
+              </Button>
+            ))}
+            <Button
+              type="button" variant="outline" size="icon"
+              className="h-7 w-7 rounded-full"
+              onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
+              disabled={safePage === totalPages}
+            >
+              <ChevronRight className="h-3.5 w-3.5" />
+            </Button>
+          </div>
         </div>
       )}
 

@@ -126,7 +126,18 @@ SESSION_SECRET=      # genera con: node -e "console.log(require('crypto').random
 GOOGLE_CLIENT_ID=tu-client-id.apps.googleusercontent.com
 GOOGLE_CLIENT_SECRET=tu-client-secret
 GOOGLE_GENAI_API_KEY=AIzaSy...
+
+# Opcional: integración Spoolman
+# Déjalo vacío para seguir usando solo inventario local.
+SPOOLMAN_BASE_URL=
+SPOOLMAN_TIMEOUT_MS=10000
 ```
+
+### Integración opcional con Spoolman
+
+- `SPOOLMAN_BASE_URL`: URL base de tu instancia de Spoolman. Puede ser `https://spoolman.tudominio.com` o `https://spoolman.tudominio.com/api/v1`; FilamentOS la normaliza automáticamente.
+- `SPOOLMAN_TIMEOUT_MS`: timeout del backend hacia Spoolman en milisegundos. Si tu red es lenta, súbelo; si lo dejas como está, `10000` suele ir bien.
+- Si `SPOOLMAN_BASE_URL` queda vacío, la integración queda **desactivada** y el inventario sigue funcionando en modo local sin dependencias remotas.
 
 ### Configurar Google OAuth
 
@@ -159,6 +170,14 @@ docker build -t filamentos .
 # Levantar
 docker compose up -d
 ```
+
+`docker-compose.yml` carga `backend/.env` mediante `env_file` y además fija en producción:
+
+- `NODE_ENV=production`
+- `DB_PATH=/data/data.db`
+- `SPOOLMAN_BASE_URL` y `SPOOLMAN_TIMEOUT_MS` desde `backend/.env`
+
+Si querés activar Spoolman en Docker, completá esas variables en `backend/.env`. Si las dejás vacías, la app arranca igual y el inventario queda en modo local.
 
 Para un despliegue completo en VPS (Ubuntu 24.04) con Nginx, HTTPS y backups automáticos, consulta [`docs/DEPLOY_VPS.md`](docs/DEPLOY_VPS.md).
 

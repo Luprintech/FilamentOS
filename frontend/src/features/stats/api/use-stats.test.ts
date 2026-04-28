@@ -28,8 +28,10 @@ const baseFilters: StatsFilters = {
   from: '2026-01-01',
   to: '2026-04-30',
   projectId: 'all',
+  status: 'all',
   granularity: 'month',
   preset: 'last30',
+  source: 'all',
 };
 
 const mockResponse = {
@@ -40,6 +42,13 @@ const mockResponse = {
     totalSecs: 3600,
     avgCostPerPiece: 2,
     projectCount: 1,
+    byStatus: {
+      pending: 0,
+      printed: 3,
+      postProcessed: 1,
+      delivered: 1,
+      failed: 0,
+    },
   },
   timeSeries: [],
   byProject: [],
@@ -107,7 +116,9 @@ describe('useStatsQuery', () => {
       from: '2026-01-01',
       to: '2026-04-30',
       projectId: 'all',
+      status: 'all',
       granularity: 'month',
+      source: 'all',
     });
   });
 

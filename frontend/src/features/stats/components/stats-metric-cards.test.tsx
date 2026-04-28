@@ -12,6 +12,13 @@ const mockSummary: StatsSummary = {
   totalSecs: 18000, // 5 hours
   avgCostPerPiece: 0.9,
   projectCount: 3,
+  byStatus: {
+    pending: 4,
+    printed: 20,
+    postProcessed: 10,
+    delivered: 6,
+    failed: 2,
+  },
 };
 
 function renderWithI18n(ui: React.ReactElement) {

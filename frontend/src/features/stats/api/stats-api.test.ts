@@ -1,6 +1,14 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { apiGetStats } from './stats-api';
 
+const emptyStatusSummary = {
+  pending: 0,
+  printed: 0,
+  postProcessed: 0,
+  delivered: 0,
+  failed: 0,
+};
+
 // Mock fetch globally
 const mockFetch = vi.fn();
 vi.stubGlobal('fetch', mockFetch);
@@ -14,7 +22,7 @@ describe('apiGetStats', () => {
     const mockResponse: Response = {
       ok: true,
       json: async () => ({
-        summary: { totalPieces: 10, totalGrams: 500, totalCost: 25.0, totalSecs: 7200, avgCostPerPiece: 2.5, projectCount: 2 },
+        summary: { totalPieces: 10, totalGrams: 500, totalCost: 25.0, totalSecs: 7200, avgCostPerPiece: 2.5, projectCount: 2, byStatus: emptyStatusSummary },
         timeSeries: [],
         byProject: [],
       }),
@@ -25,7 +33,9 @@ describe('apiGetStats', () => {
       from: '2026-01-01',
       to: '2026-04-22',
       projectId: 'all',
+      status: 'all',
       granularity: 'month',
+      source: 'all',
     });
 
     expect(mockFetch).toHaveBeenCalledWith(
@@ -50,14 +60,14 @@ describe('apiGetStats', () => {
     mockFetch.mockResolvedValue(mockResponse);
 
     await expect(
-      apiGetStats({ from: '2026-01-01', to: '2026-04-22', projectId: 'all', granularity: 'month' })
+      apiGetStats({ from: '2026-01-01', to: '2026-04-22', projectId: 'all', status: 'all', granularity: 'month', source: 'all' })
     ).rejects.toThrow('Unauthorized');
   });
 
   it('passes projectId filter when specified', async () => {
     const mockResponse: Response = {
       ok: true,
-      json: async () => ({ summary: {}, timeSeries: [], byProject: [] }),
+      json: async () => ({ summary: { totalPieces: 0, totalGrams: 0, totalCost: 0, totalSecs: 0, avgCostPerPiece: 0, projectCount: 0, byStatus: emptyStatusSummary }, timeSeries: [], byProject: [] }),
     } as unknown as Response;
     mockFetch.mockResolvedValue(mockResponse);
 
@@ -65,7 +75,9 @@ describe('apiGetStats', () => {
       from: '2026-01-01',
       to: '2026-04-22',
       projectId: 'project-uuid-123',
+      status: 'all',
       granularity: 'day',
+      source: 'all',
     });
 
     const url = mockFetch.mock.calls[0][0] as string;
