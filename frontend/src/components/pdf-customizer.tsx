@@ -1,12 +1,4 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
-import { motion, AnimatePresence } from 'framer-motion';
-import {
-  Dialog,
-  DialogContent,
-  DialogHeader,
-  DialogTitle
-} from '@/components/ui/dialog';
-import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Label } from '@/components/ui/label';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
@@ -14,18 +6,8 @@ import { Switch } from '@/components/ui/switch';
 import { Button } from '@/components/ui/button';
 import { useToast } from '@/hooks/use-toast';
 import { usePdfCustomization, PdfCustomization, ProjectData, SocialLink } from '@/features/calculator/api/use-pdf-customization';
-import {
-  Palette,
-  Layout,
-  Eye,
-  Save,
-  FileDown,
-  X,
-  Loader2,
-  FileText,
-  Trash2,
-  Plus,
-} from 'lucide-react';
+import { PdfCustomizerShell } from '@/components/pdf-customizer-shell';
+import { X, Loader2, Trash2, Plus, Save } from 'lucide-react';
 
 // Redes disponibles para el selector
 const SOCIAL_NETWORKS = [
@@ -394,74 +376,10 @@ export function PdfCustomizer({ open, onOpenChange, projectData, guestMode = fal
     }
   };
 
-  return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-[95vw] h-[95vh] p-0 gap-0">
-        {/* Header */}
-        <DialogHeader className="px-6 py-4 border-b">
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-3">
-              <div className="p-2 bg-primary/10 rounded-lg">
-                <FileText className="h-5 w-5 text-primary" />
-              </div>
-              <div>
-                <DialogTitle className="text-xl font-bold">Customizar PDF</DialogTitle>
-                <p className="text-sm text-muted-foreground">
-                  Personaliza tu presupuesto con logo, colores y layout
-                </p>
-              </div>
-            </div>
-            <div className="flex gap-2">
-              {!guestMode && (
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={handleSaveConfig}
-                  disabled={isSavingConfig}
-                >
-                  {isSavingConfig ? (
-                    <Loader2 className="h-4 w-4 animate-spin" />
-                  ) : (
-                    <Save className="h-4 w-4" />
-                  )}
-                  <span className="ml-2">Guardar</span>
-                </Button>
-              )}
-              <Button
-                size="sm"
-                onClick={handleGeneratePdf}
-                disabled={isGeneratingPdf}
-              >
-                {isGeneratingPdf ? (
-                  <Loader2 className="h-4 w-4 animate-spin" />
-                ) : (
-                  <FileDown className="h-4 w-4" />
-                )}
-                <span className="ml-2">{guestMode ? 'Vista previa' : 'Generar PDF'}</span>
-              </Button>
-            </div>
-          </div>
-        </DialogHeader>
+  // ── Panels ────────────────────────────────────────────────────────────────
 
-        {/* Content */}
-        <div className="flex-1 overflow-hidden">
-          <div className="grid grid-cols-2 h-full">
-            {/* Left Panel - Controls */}
-            <div className="border-r overflow-y-auto p-6">
-              <Tabs value={activeTab} onValueChange={setActiveTab}>
-                <TabsList className="grid w-full grid-cols-2">
-                  <TabsTrigger value="design">
-                    <Palette className="h-4 w-4 mr-2" />
-                    Diseño
-                  </TabsTrigger>
-                  <TabsTrigger value="layout">
-                    <Layout className="h-4 w-4 mr-2" />
-                    Layout
-                  </TabsTrigger>
-                </TabsList>
-
-                {/* Design Tab */}
-                <TabsContent value="design" className="space-y-6 mt-6 min-h-[600px]">
+  const designPanel = (
+    <div className="space-y-6">
                   {/* Logo Upload */}
                   <div className="space-y-3">
                     <Label className="text-base font-semibold">Logo de la Empresa</Label>
@@ -751,115 +669,67 @@ export function PdfCustomizer({ open, onOpenChange, projectData, guestMode = fal
                       rows={3}
                     />
                   </div>
-                </TabsContent>
+    </div>
+  );
 
-                {/* Layout Tab */}
-                <TabsContent value="layout" className="space-y-4 mt-6 min-h-[600px]">
-                  <Label className="text-base font-semibold">Secciones a Mostrar</Label>
-
-                  <div className="space-y-4">
-                    <div className="flex items-center justify-between">
-                      <Label htmlFor="showBreakdown" className="cursor-pointer">
-                        Desglose detallado de costes
-                      </Label>
-                      <Switch
-                        id="showBreakdown"
-                        checked={config.showBreakdown}
-                        onCheckedChange={(checked) => setConfig(prev => ({ ...prev, showBreakdown: checked }))}
-                      />
-                    </div>
-
-                    <div className="flex items-center justify-between">
-                      <Label htmlFor="showElectricity" className="cursor-pointer">
-                        Costes de electricidad
-                      </Label>
-                      <Switch
-                        id="showElectricity"
-                        checked={config.showElectricity}
-                        onCheckedChange={(checked) => setConfig(prev => ({ ...prev, showElectricity: checked }))}
-                      />
-                    </div>
-
-                    <div className="flex items-center justify-between">
-                      <Label htmlFor="showLaborCosts" className="cursor-pointer">
-                        Costes de mano de obra
-                      </Label>
-                      <Switch
-                        id="showLaborCosts"
-                        checked={config.showLaborCosts}
-                        onCheckedChange={(checked) => setConfig(prev => ({ ...prev, showLaborCosts: checked }))}
-                      />
-                    </div>
-
-                    <div className="flex items-center justify-between">
-                      <Label htmlFor="showMachineCosts" className="cursor-pointer">
-                        Costes de máquina y amortización
-                      </Label>
-                      <Switch
-                        id="showMachineCosts"
-                        checked={config.showMachineCosts}
-                        onCheckedChange={(checked) => setConfig(prev => ({ ...prev, showMachineCosts: checked }))}
-                      />
-                    </div>
-
-                    <div className="flex items-center justify-between">
-                      <Label htmlFor="showOtherCosts" className="cursor-pointer">
-                        Otros costes adicionales
-                      </Label>
-                      <Switch
-                        id="showOtherCosts"
-                        checked={config.showOtherCosts}
-                        onCheckedChange={(checked) => setConfig(prev => ({ ...prev, showOtherCosts: checked }))}
-                      />
-                    </div>
-                  </div>
-                </TabsContent>
-              </Tabs>
-            </div>
-
-            {/* Right Panel - Preview */}
-            <div className="bg-gray-50 dark:bg-gray-900 flex flex-col">
-              <div className="p-4 border-b bg-white dark:bg-gray-800 flex items-center justify-between">
-                <div className="flex items-center gap-2">
-                  <Eye className="h-4 w-4 text-muted-foreground" />
-                  <span className="text-sm font-medium">Vista Previa</span>
-                </div>
-                <Button
-                  size="sm"
-                  variant="outline"
-                  onClick={handleGeneratePreview}
-                  disabled={isGeneratingPreview}
-                >
-                  {isGeneratingPreview ? (
-                    <Loader2 className="h-4 w-4 animate-spin mr-2" />
-                  ) : null}
-                  Actualizar
-                </Button>
-              </div>
-
-              <div className="flex-1 p-4 overflow-auto">
-                {isGeneratingPreview ? (
-                  <div className="h-full flex items-center justify-center">
-                    <Loader2 className="h-8 w-8 animate-spin text-primary" />
-                  </div>
-                ) : previewHtml ? (
-                  <iframe
-                    ref={iframeRef}
-                    srcDoc={previewHtml}
-                    className="w-full h-full border rounded-lg bg-white shadow-lg"
-                    title="PDF Preview"
-                  />
-                ) : (
-                  <div className="h-full flex items-center justify-center text-muted-foreground">
-                    <p>Generando vista previa…</p>
-                  </div>
-                )}
-              </div>
-            </div>
+  const layoutPanel = (
+    <div className="space-y-4">
+      <Label className="text-base font-semibold">Secciones a Mostrar</Label>
+      <div className="space-y-4">
+        {[
+          { id: 'showBreakdown',   label: 'Desglose detallado de costes',      key: 'showBreakdown'   as const },
+          { id: 'showElectricity', label: 'Costes de electricidad',             key: 'showElectricity' as const },
+          { id: 'showLaborCosts',  label: 'Costes de mano de obra',             key: 'showLaborCosts'  as const },
+          { id: 'showMachineCosts',label: 'Costes de máquina y amortización',   key: 'showMachineCosts'as const },
+          { id: 'showOtherCosts',  label: 'Otros costes adicionales',           key: 'showOtherCosts'  as const },
+        ].map(({ id, label, key }) => (
+          <div key={id} className="flex items-center justify-between">
+            <Label htmlFor={id} className="cursor-pointer">{label}</Label>
+            <Switch
+              id={id}
+              checked={config[key]}
+              onCheckedChange={(checked) => setConfig(prev => ({ ...prev, [key]: checked }))}
+            />
           </div>
-        </div>
-      </DialogContent>
-    </Dialog>
+        ))}
+      </div>
+    </div>
+  );
+
+  const previewPanel = isGeneratingPreview ? (
+    <div className="flex h-full min-h-[200px] items-center justify-center">
+      <Loader2 className="h-8 w-8 animate-spin text-primary" />
+    </div>
+  ) : previewHtml ? (
+    <iframe
+      ref={iframeRef}
+      srcDoc={previewHtml}
+      className="h-full min-h-[400px] w-full rounded-xl border bg-white shadow-lg"
+      title="PDF Preview"
+    />
+  ) : (
+    <div className="flex h-full min-h-[200px] items-center justify-center text-sm text-muted-foreground">
+      Generando vista previa…
+    </div>
+  );
+
+  return (
+    <PdfCustomizerShell
+      open={open}
+      onOpenChange={onOpenChange}
+      title="Customizar PDF"
+      subtitle="Personaliza tu presupuesto con logo, colores y layout"
+      designPanel={designPanel}
+      layoutPanel={layoutPanel}
+      previewPanel={previewPanel}
+      onRefreshPreview={handleGeneratePreview}
+      isRefreshing={isGeneratingPreview}
+      onSave={handleSaveConfig}
+      isSaving={isSavingConfig}
+      onGeneratePdf={handleGeneratePdf}
+      isGeneratingPdf={isGeneratingPdf}
+      guestMode={guestMode}
+    />
   );
 }
 

@@ -48,7 +48,7 @@ function sanitizeLogoUrl(logoPath: unknown): string | null {
   // Permitir data URIs de imágenes (ya embebidos en base64)
   if (/^data:image\/(png|jpeg|jpg|gif|webp|svg\+xml);base64,[A-Za-z0-9+/=]+={0,2}$/.test(p)) return p;
   // Permitir rutas relativas de uploads (con o sin / inicial)
-  if (/^(\/)?uploads\/logos\/[a-zA-Z0-9_\-]+\.(png|jpg|jpeg)$/i.test(p)) {
+  if (/^(\/)?uploads\/logos\/[a-zA-Z0-9_\-]+\.(png|jpg|jpeg|svg)$/i.test(p)) {
     return p.startsWith('/') ? p : '/' + p;
   }
   // URLs externas http/https: permitir
@@ -69,7 +69,7 @@ function resolveLogoToDataUri(logoPath: string | null): string | null {
   // Si es URL externa http/https, usarla tal cual (Puppeteer puede fetchearlo)
   if (/^https?:\/\//i.test(logoPath)) return logoPath;
   // Si es ruta de uploads local, convertir a base64
-  const match = logoPath.match(/^\/?uploads\/logos\/([a-zA-Z0-9_\-]+\.(?:png|jpg|jpeg))$/i);
+  const match = logoPath.match(/^\/?uploads\/logos\/([a-zA-Z0-9_\-]+\.(?:png|jpg|jpeg|svg))$/i);
   if (match) {
     const filename = match[1];
     const filePath = path.join(UPLOADS_DIR, filename);
@@ -77,7 +77,11 @@ function resolveLogoToDataUri(logoPath: string | null): string | null {
       if (fs.existsSync(filePath)) {
         const data = fs.readFileSync(filePath);
         const ext = path.extname(filename).toLowerCase().slice(1);
-        const mime = ext === 'jpg' || ext === 'jpeg' ? 'image/jpeg' : 'image/png';
+        const mime = ext === 'jpg' || ext === 'jpeg'
+          ? 'image/jpeg'
+          : ext === 'svg'
+            ? 'image/svg+xml'
+            : 'image/png';
         return `data:${mime};base64,${data.toString('base64')}`;
       }
     } catch {
