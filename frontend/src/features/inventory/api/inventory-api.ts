@@ -1,5 +1,5 @@
 import { httpRequest, jsonRequest, HttpClientError } from '@/shared/api/http-client';
-import type { Spool, SpoolInput, SpoolmanRemoteSpool, SpoolmanStatus, SpoolmanSyncResult } from '../types';
+import type { Spool, SpoolInput } from '../types';
 
 // ── Error ──────────────────────────────────────────────────────────────────────
 
@@ -61,23 +61,4 @@ export async function apiGetCustomOptions(): Promise<{ brands: string[]; materia
   return apiFetch<{ brands: string[]; materials: string[] }>('/api/inventory/custom-options');
 }
 
-export async function apiGetSpoolmanStatus(): Promise<SpoolmanStatus> {
-  return apiFetch<SpoolmanStatus>('/api/inventory/spoolman/status');
-}
 
-export async function apiSyncSpoolman(): Promise<SpoolmanSyncResult> {
-  return apiFetch<SpoolmanSyncResult>('/api/inventory/spoolman/sync', { method: 'POST' });
-}
-
-export async function apiGetRemoteSpool(spoolmanId: number): Promise<SpoolmanRemoteSpool> {
-  const response = await apiFetch<{ remoteSpool: SpoolmanRemoteSpool }>(`/api/inventory/spoolman/spools/${spoolmanId}`);
-  return response.remoteSpool;
-}
-
-export async function apiLinkSpoolman(id: string, spoolmanId: number): Promise<Spool> {
-  const response = await apiFetch<{ spool: Spool }>(
-    `/api/inventory/spools/${id}/link-spoolman`,
-    jsonRequest('POST', { spoolmanId }),
-  );
-  return response.spool;
-}

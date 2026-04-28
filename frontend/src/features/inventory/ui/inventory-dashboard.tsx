@@ -54,15 +54,11 @@ export function InventoryDashboard({ userId, authLoading }: InventoryDashboardPr
     error,
     customBrands,
     customMaterials,
-    spoolmanStatus,
     createSpool,
     updateSpool,
     deleteSpool,
     deductSpool,
     finishSpool,
-    syncSpoolman,
-    getRemoteSpool,
-    linkSpoolman,
   } =
     useInventory({ userId, authLoading });
 
@@ -73,8 +69,6 @@ export function InventoryDashboard({ userId, authLoading }: InventoryDashboardPr
   const [scannerOpen, setScannerOpen]     = useState(false);
   const [scanPrefill, setScanPrefill]     = useState<Partial<ScannerFillData> | null>(null);
   const [loginModalOpen, setLoginModalOpen] = useState(false);
-  const [syncFeedback, setSyncFeedback] = useState<string | null>(null);
-  const [syncing, setSyncing] = useState(false);
 
   // ── Pagination ────────────────────────────────────────────────────────────────
   const [page, setPage]   = useState(1);
@@ -162,26 +156,6 @@ export function InventoryDashboard({ userId, authLoading }: InventoryDashboardPr
     await finishSpool(id);
   }
 
-  async function handleSyncSpoolman() {
-    setSyncing(true);
-    try {
-      const result = await syncSpoolman();
-      setSyncFeedback(t('inventory.spoolman.syncSuccess', { ...result }));
-    } catch (syncError) {
-      setSyncFeedback(syncError instanceof Error ? syncError.message : t('inventory.spoolman.syncError'));
-    } finally {
-      setSyncing(false);
-    }
-  }
-
-  const spoolmanBannerMessage = spoolmanStatus?.state === 'degraded'
-    ? t('inventory.spoolman.banner.degraded')
-    : spoolmanStatus?.state === 'connected'
-    ? t('inventory.spoolman.banner.connected')
-    : spoolmanStatus?.state === 'unconfigured'
-    ? t('inventory.spoolman.banner.unconfigured')
-    : null;
-
   // ── Render ────────────────────────────────────────────────────────────────────
 
   if (!userId && !authLoading && !isGuest) {
@@ -244,30 +218,6 @@ export function InventoryDashboard({ userId, authLoading }: InventoryDashboardPr
         <div className="flex items-center gap-2 rounded-xl border border-orange-400/30 bg-orange-400/8 px-4 py-3 text-sm text-orange-400">
           <AlertTriangle className="h-4 w-4 shrink-0" />
           <span>{t('inventory.lowStockWarning', { count: lowStockCount })}</span>
-        </div>
-      )}
-
-      {!isGuest && spoolmanStatus && spoolmanBannerMessage && (
-        <div className="rounded-2xl border border-border/60 bg-card/60 px-4 py-3">
-          <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-            <div className="space-y-1">
-              <p className="text-sm font-semibold text-foreground">{spoolmanBannerMessage}</p>
-              {spoolmanStatus.endpoint && (
-                <p className="text-xs text-muted-foreground">{spoolmanStatus.endpoint}</p>
-              )}
-              {spoolmanStatus.error && (
-                <p className="text-xs text-muted-foreground">{spoolmanStatus.error}</p>
-              )}
-              {syncFeedback && (
-                <p className="text-xs text-muted-foreground">{syncFeedback}</p>
-              )}
-            </div>
-            {spoolmanStatus.configured && (
-              <Button type="button" variant="outline" onClick={() => void handleSyncSpoolman()} disabled={syncing}>
-                {syncing ? t('inventory.spoolman.syncing') : t('inventory.spoolman.sync')}
-              </Button>
-            )}
-          </div>
         </div>
       )}
 
@@ -412,9 +362,6 @@ export function InventoryDashboard({ userId, authLoading }: InventoryDashboardPr
           customBrands={customBrands}
           customMaterials={customMaterials}
           prefill={scanPrefill ?? undefined}
-          spoolmanConfigured={spoolmanStatus?.configured ?? false}
-          getRemoteSpool={getRemoteSpool}
-          onLinkSpoolman={linkSpoolman}
         />
       )}
 

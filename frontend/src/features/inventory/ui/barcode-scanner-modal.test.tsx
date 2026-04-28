@@ -1,4 +1,4 @@
-import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
+import { describe, it, expect, vi } from 'vitest';
 import { render, screen, fireEvent, waitFor } from '@testing-library/react';
 
 vi.mock('react-i18next', () => ({
@@ -20,8 +20,6 @@ vi.mock('react-i18next', () => ({
         scan_ios_hint: 'Necesitás HTTPS y permisos de cámara para escanear.',
         scan_camera_error: 'No se pudo iniciar la cámara.',
         scan_source_manual: 'Sin datos registrados',
-        scan_source_spoolman: 'Spoolman',
-        'inventory.scanner.spoolmanDetected': 'Etiqueta de Spoolman detectada. Podés crear una bobina nueva o vincularla con una existente.',
         'inventory.scanner.notLinked': 'Código comercial sin vínculo en tu inventario.',
       };
       return translations[key] ?? key;
@@ -55,87 +53,7 @@ vi.mock('html5-qrcode', () => ({
 
 import { BarcodeScannerModal } from './barcode-scanner-modal';
 
-describe('BarcodeScannerModal Spoolman lookup UX', () => {
-  beforeEach(() => {
-    vi.clearAllMocks();
-    scannerStartImpl = null;
-    Object.defineProperty(window, 'isSecureContext', { value: true, configurable: true });
-    Object.defineProperty(navigator, 'mediaDevices', {
-      value: { getUserMedia: vi.fn() },
-      configurable: true,
-    });
-  });
-
-  afterEach(() => {
-    vi.unstubAllGlobals();
-  });
-
-  it('distingue una etiqueta QR de Spoolman y muestra el mensaje de vínculo', async () => {
-    vi.stubGlobal('fetch', vi.fn().mockResolvedValue({
-      ok: true,
-      json: async () => ({
-        found: true,
-        source: 'spoolman',
-        linked: false,
-        data: {
-          brand: 'Polymaker',
-          name: 'PolyLite PLA Pro',
-          material: 'PLA',
-          color: 'Orange',
-          colorHex: '#ff8800',
-          weightGrams: 1000,
-          diameter: null,
-          printTempMin: null,
-          printTempMax: null,
-          bedTempMin: null,
-          bedTempMax: null,
-          price: 31,
-          spoolmanId: 77,
-        },
-      }),
-    }));
-
-    render(<BarcodeScannerModal open onClose={vi.fn()} onFill={vi.fn()} />);
-
-    fireEvent.click(screen.getByRole('button', { name: 'Activar cámara' }));
-
-    await waitFor(() => expect(screen.getByText('Polymaker')).toBeInTheDocument());
-    expect(screen.getByText('Etiqueta de Spoolman detectada. Podés crear una bobina nueva o vincularla con una existente.')).toBeInTheDocument();
-  });
-
-  it('muestra fallback manual cuando el código comercial no está vinculado', async () => {
-    vi.stubGlobal('fetch', vi.fn().mockResolvedValue({
-      ok: true,
-      json: async () => ({
-        found: false,
-        source: 'manual',
-        linked: false,
-        data: {
-          brand: null,
-          name: null,
-          material: null,
-          color: null,
-          colorHex: null,
-          weightGrams: null,
-          diameter: null,
-          printTempMin: null,
-          printTempMax: null,
-          bedTempMin: null,
-          bedTempMax: null,
-          price: null,
-        },
-      }),
-    }));
-
-    render(<BarcodeScannerModal open onClose={vi.fn()} onFill={vi.fn()} />);
-
-    fireEvent.click(screen.getByRole('button', { name: 'Activar cámara' }));
-
-    await waitFor(() => expect(screen.getAllByText('Sin datos registrados').length).toBeGreaterThan(0));
-    expect(screen.getByText('Código comercial sin vínculo en tu inventario.')).toBeInTheDocument();
-    expect(screen.queryByText('Spoolman')).not.toBeInTheDocument();
-  });
-
+describe('BarcodeScannerModal', () => {
   it('muestra un error de cámara cuando el contexto no es seguro', async () => {
     Object.defineProperty(window, 'isSecureContext', { value: false, configurable: true });
 
@@ -158,52 +76,6 @@ describe('BarcodeScannerModal Spoolman lookup UX', () => {
 
     await waitFor(() => {
       expect(screen.getByText('Error al buscar el filamento.')).toBeInTheDocument();
-    });
-  });
-
-  it('rellena el formulario con los datos detectados por Spoolman', async () => {
-    const onFill = vi.fn();
-    vi.stubGlobal('fetch', vi.fn().mockResolvedValue({
-      ok: true,
-      json: async () => ({
-        found: true,
-        source: 'spoolman',
-        linked: true,
-        data: {
-          brand: 'Polymaker',
-          name: 'PolyLite PLA Pro',
-          material: 'PLA',
-          color: 'Orange',
-          colorHex: '#ff8800',
-          weightGrams: 1000,
-          diameter: null,
-          printTempMin: null,
-          printTempMax: null,
-          bedTempMin: null,
-          bedTempMax: null,
-          price: 31,
-        },
-      }),
-    }));
-
-    render(<BarcodeScannerModal open onClose={vi.fn()} onFill={onFill} />);
-
-    fireEvent.click(screen.getByRole('button', { name: 'Activar cámara' }));
-    await waitFor(() => expect(screen.getByRole('button', { name: 'Rellenar formulario' })).toBeInTheDocument());
-
-    fireEvent.click(screen.getByRole('button', { name: 'Rellenar formulario' }));
-
-    expect(onFill).toHaveBeenCalledWith({
-      brand: 'Polymaker',
-      material: 'PLA',
-      color: 'Orange',
-      colorHex: '#ff8800',
-      totalGrams: 1000,
-      remainingG: 1000,
-      price: 31,
-      notes: 'PolyLite PLA Pro',
-      rawCode: 'mock-scanned-code',
-      source: 'spoolman',
     });
   });
 
@@ -230,41 +102,6 @@ describe('BarcodeScannerModal Spoolman lookup UX', () => {
     fireEvent.pointerDown(document.body);
 
     expect(onClose).toHaveBeenCalled();
-  });
-
-  it('reinicia un nuevo escaneo desde el resultado y vuelve a consultar el código', async () => {
-    vi.stubGlobal('fetch', vi.fn().mockResolvedValue({
-      ok: true,
-      json: async () => ({
-        found: true,
-        source: 'spoolman',
-        linked: true,
-        data: {
-          brand: 'Polymaker',
-          name: 'PolyLite PLA Pro',
-          material: 'PLA',
-          color: 'Orange',
-          colorHex: '#ff8800',
-          weightGrams: 1000,
-          diameter: null,
-          printTempMin: null,
-          printTempMax: null,
-          bedTempMin: null,
-          bedTempMax: null,
-          price: 31,
-        },
-      }),
-    }));
-
-    render(<BarcodeScannerModal open onClose={vi.fn()} onFill={vi.fn()} />);
-
-    fireEvent.click(screen.getByRole('button', { name: 'Activar cámara' }));
-    await screen.findByRole('button', { name: 'Rellenar formulario' });
-
-    fireEvent.click(screen.getAllByRole('button', { name: 'Activar cámara' })[0]);
-
-    await waitFor(() => expect(scannerStart).toHaveBeenCalledTimes(2));
-    await waitFor(() => expect(fetch).toHaveBeenCalledTimes(2));
   });
 
   it('usa valores por defecto al rellenar cuando el lookup manual no trae metadata', async () => {

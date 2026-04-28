@@ -63,7 +63,7 @@ export function SpoolCard({ spool, onEdit, onDelete, onDeduct, onFinish, guestMo
   const percent = getRemainingPercent(spool);
   const lowStock = isLowStock(spool);
   const finished = spool.status === 'finished';
-  const sourceLabel = spool.inventorySource === 'spoolman' ? t('inventory.source.spoolman') : t('inventory.source.local');
+  const sourceLabel = t('inventory.source.local');
 
   const guestTooltip = 'Inicia sesión para gestionar tu inventario';
 

@@ -13,7 +13,6 @@ vi.mock('react-i18next', () => ({
         'inventory.price': 'Precio',
         'inventory.buyLink': 'Comprar',
         'inventory.source.local': 'Local',
-        'inventory.source.spoolman': 'Spoolman',
       };
       return translations[key] ?? key;
     },
@@ -34,7 +33,6 @@ function createSpool(overrides: Partial<Spool> = {}): Spool {
     price: overrides.price ?? 20,
     notes: overrides.notes ?? '',
     shopUrl: overrides.shopUrl ?? null,
-    spoolmanId: overrides.spoolmanId ?? null,
     inventorySource: overrides.inventorySource ?? 'local',
     linkedAt: overrides.linkedAt ?? null,
     lastSyncedAt: overrides.lastSyncedAt ?? null,
@@ -44,35 +42,7 @@ function createSpool(overrides: Partial<Spool> = {}): Spool {
   };
 }
 
-describe('SpoolCard source badges', () => {
-  it('muestra la procedencia local para bobinas sin vínculo remoto', () => {
-    render(
-      <SpoolCard
-        spool={createSpool({ inventorySource: 'local', spoolmanId: null })}
-        onEdit={vi.fn()}
-        onDelete={vi.fn()}
-        onDeduct={vi.fn()}
-        onFinish={vi.fn()}
-      />,
-    );
-
-    expect(screen.getByText('Local')).toBeInTheDocument();
-  });
-
-  it('muestra la procedencia Spoolman para bobinas sincronizadas', () => {
-    render(
-      <SpoolCard
-        spool={createSpool({ inventorySource: 'spoolman', spoolmanId: 55 })}
-        onEdit={vi.fn()}
-        onDelete={vi.fn()}
-        onDeduct={vi.fn()}
-        onFinish={vi.fn()}
-      />,
-    );
-
-    expect(screen.getByText('Spoolman')).toBeInTheDocument();
-  });
-
+describe('SpoolCard', () => {
   it('expone el enlace de compra cuando la bobina tiene shopUrl', () => {
     render(
       <SpoolCard
@@ -154,7 +124,7 @@ describe('SpoolCard source badges', () => {
 
     render(
       <SpoolCard
-        spool={createSpool({ status: 'finished', inventorySource: 'spoolman', remainingG: 0 })}
+        spool={createSpool({ status: 'finished', remainingG: 0 })}
         onEdit={onEdit}
         onDelete={onDelete}
         onDeduct={vi.fn()}
@@ -163,7 +133,6 @@ describe('SpoolCard source badges', () => {
     );
 
     expect(screen.getByText('Terminada')).toBeInTheDocument();
-    expect(screen.getByText('Spoolman')).toBeInTheDocument();
     expect(screen.queryByText(/inventory.deduct/i)).not.toBeInTheDocument();
     expect(screen.queryByText(/inventory.markFinished/i)).not.toBeInTheDocument();
 

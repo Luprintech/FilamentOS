@@ -15,17 +15,7 @@ import { XMLParser } from 'fast-xml-parser';
 import nodemailer from 'nodemailer';
 import dns from 'dns';
 import { promisify } from 'util';
-import {
-  createSpoolmanClient,
-  getRemoteBrand,
-  getRemoteMaterial,
-  getRemoteNotes,
-  mapRemoteColorHex,
-  type SpoolmanApiSpool,
-  type SpoolmanStatus,
-  SpoolmanClientError,
-} from './spoolman-client.js';
-import { resolveInventoryLabel } from './inventory-label-resolver.js';
+
 
 dotenv.config();
 
@@ -205,10 +195,6 @@ db.exec(`
     price        REAL NOT NULL DEFAULT 0,
     notes        TEXT NOT NULL DEFAULT '',
     shop_url     TEXT,
-    spoolman_id  INTEGER,
-    inventory_source TEXT NOT NULL DEFAULT 'local',
-    linked_at    TEXT,
-    last_synced_at TEXT,
     status       TEXT NOT NULL DEFAULT 'active',
     created_at   TEXT DEFAULT (datetime('now')),
     updated_at   TEXT DEFAULT (datetime('now'))
@@ -361,25 +347,8 @@ if (inventoryColNames.size > 0) {
   if (!inventoryColNames.has('shop_url')) {
     db.exec("ALTER TABLE filament_inventory ADD COLUMN shop_url TEXT");
   }
-  if (!inventoryColNames.has('spoolman_id')) {
-    db.exec('ALTER TABLE filament_inventory ADD COLUMN spoolman_id INTEGER');
-  }
-  if (!inventoryColNames.has('inventory_source')) {
-    db.exec("ALTER TABLE filament_inventory ADD COLUMN inventory_source TEXT NOT NULL DEFAULT 'local'");
-  }
-  if (!inventoryColNames.has('linked_at')) {
-    db.exec('ALTER TABLE filament_inventory ADD COLUMN linked_at TEXT');
-  }
-  if (!inventoryColNames.has('last_synced_at')) {
-    db.exec('ALTER TABLE filament_inventory ADD COLUMN last_synced_at TEXT');
-  }
-}
 
-db.exec(`
-  CREATE UNIQUE INDEX IF NOT EXISTS idx_filament_inventory_user_spoolman
-  ON filament_inventory(user_id, spoolman_id)
-  WHERE spoolman_id IS NOT NULL;
-`);
+}
 
 // Ensure tracker_piece_filaments table exists (migration for existing DBs)
 const trackerFilamentTables = db
@@ -1331,10 +1300,6 @@ interface DbSpool {
   price: number;
   notes: string;
   shop_url: string | null;
-  spoolman_id: number | null;
-  inventory_source: string;
-  linked_at: string | null;
-  last_synced_at: string | null;
   status: string;
   created_at: string;
   updated_at: string;
@@ -1351,20 +1316,9 @@ interface InventorySpoolResponse {
   price: number;
   notes: string;
   shopUrl: string | null;
-  spoolmanId: number | null;
-  inventorySource: 'local' | 'spoolman';
-  linkedAt: string | null;
-  lastSyncedAt: string | null;
   status: 'active' | 'finished';
   createdAt: string;
   updatedAt: string;
-}
-
-interface RemoteSpoolLookupData extends FilamentData {
-  spoolmanId: number;
-  remainingG: number;
-  totalGrams: number;
-  notes: string;
 }
 
 function mapSpool(r: DbSpool) {
@@ -1379,43 +1333,10 @@ function mapSpool(r: DbSpool) {
     price: r.price,
     notes: r.notes,
     shopUrl: r.shop_url ?? null,
-    spoolmanId: r.spoolman_id ?? null,
-    inventorySource: (r.inventory_source === 'spoolman' ? 'spoolman' : 'local') as 'local' | 'spoolman',
-    linkedAt: r.linked_at ?? null,
-    lastSyncedAt: r.last_synced_at ?? null,
     status: r.status as 'active' | 'finished',
     createdAt: r.created_at,
     updatedAt: r.updated_at,
   } satisfies InventorySpoolResponse;
-}
-
-function mapRemoteSpool(spool: SpoolmanApiSpool): RemoteSpoolLookupData {
-  const totalGrams = Number(spool.initial_weight ?? 0);
-  const remainingG = Number(spool.remaining_weight ?? 0);
-  return {
-    brand: getRemoteBrand(spool),
-    name: spool.filament?.name?.trim() || getRemoteMaterial(spool),
-    color: null,
-    colorHex: mapRemoteColorHex(spool),
-    material: getRemoteMaterial(spool),
-    diameter: null,
-    weightGrams: totalGrams,
-    printTempMin: null,
-    printTempMax: null,
-    bedTempMin: null,
-    bedTempMax: null,
-    price: Number(spool.price ?? spool.cost ?? 0),
-    spoolmanId: spool.id,
-    remainingG,
-    totalGrams,
-    notes: getRemoteNotes(spool),
-  };
-}
-
-function getLinkedSpoolForUser(userId: string, spoolmanId: number): DbSpool | undefined {
-  return db
-    .prepare('SELECT * FROM filament_inventory WHERE user_id = ? AND spoolman_id = ?')
-    .get(userId, spoolmanId) as DbSpool | undefined;
 }
 
 function assertPositiveInteger(value: unknown): number | null {
@@ -1461,123 +1382,7 @@ app.get('/api/inventory/spools', requireAuth, (req, res) => {
   res.json(rows.map(mapSpool));
 });
 
-app.get('/api/inventory/spoolman/status', requireAuth, async (_req, res) => {
-  const client = createSpoolmanClient();
-  const status: SpoolmanStatus = await client.getStatus();
-  res.json(status);
-});
 
-app.post('/api/inventory/spoolman/sync', requireAuth, async (req, res) => {
-  const user = req.user as DbUser;
-  const client = createSpoolmanClient();
-
-  if (!client.configured) {
-    res.status(400).json({ error: 'Spoolman is not configured.' });
-    return;
-  }
-
-  try {
-    const remoteSpools = await client.listSpools();
-    let created = 0;
-    let updated = 0;
-    let skipped = 0;
-    const now = new Date().toISOString();
-
-    const insertStatement = db.prepare(
-      `INSERT INTO filament_inventory
-        (id, user_id, brand, material, color, color_hex, total_grams, remaining_g, price, notes, shop_url, spoolman_id, inventory_source, linked_at, last_synced_at, status, created_at, updated_at)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'spoolman', ?, ?, 'active', ?, ?)`
-    );
-    const updateStatement = db.prepare(
-      `UPDATE filament_inventory
-       SET brand = ?, material = ?, color = ?, color_hex = ?, total_grams = ?, remaining_g = ?, price = ?, notes = ?, spoolman_id = ?, inventory_source = 'spoolman', linked_at = COALESCE(linked_at, ?), last_synced_at = ?, updated_at = ?
-       WHERE id = ? AND user_id = ?`
-    );
-
-    const transaction = db.transaction((spools: SpoolmanApiSpool[]) => {
-      for (const remoteSpool of spools) {
-        const spoolmanId = assertPositiveInteger(remoteSpool.id);
-        if (!spoolmanId) {
-          skipped += 1;
-          continue;
-        }
-
-        const mapped = mapRemoteSpool(remoteSpool);
-        const existing = getLinkedSpoolForUser(user.id, spoolmanId);
-
-        if (existing) {
-          updateStatement.run(
-            mapped.brand,
-            mapped.material,
-            existing.color,
-            mapped.colorHex ?? '#cccccc',
-            mapped.totalGrams,
-            mapped.remainingG,
-            mapped.price ?? 0,
-            mapped.notes,
-            spoolmanId,
-            now,
-            now,
-            now,
-            existing.id,
-            user.id,
-          );
-          updated += 1;
-          continue;
-        }
-
-        insertStatement.run(
-          crypto.randomUUID(),
-          user.id,
-          mapped.brand,
-          mapped.material,
-          mapped.name,
-          mapped.colorHex ?? '#cccccc',
-          mapped.totalGrams,
-          mapped.remainingG,
-          mapped.price ?? 0,
-          mapped.notes,
-          null,
-          spoolmanId,
-          now,
-          now,
-          now,
-          now,
-        );
-        created += 1;
-      }
-    });
-
-    transaction(remoteSpools);
-    res.json({ created, updated, skipped });
-  } catch (error) {
-    const message = error instanceof Error ? error.message : 'Failed to sync Spoolman inventory.';
-    res.status(502).json({ error: message });
-  }
-});
-
-app.get('/api/inventory/spoolman/spools/:spoolmanId', requireAuth, async (req, res) => {
-  const spoolmanId = assertPositiveInteger(req.params.spoolmanId);
-  if (!spoolmanId) {
-    res.status(400).json({ error: 'spoolmanId must be a positive integer.' });
-    return;
-  }
-
-  const client = createSpoolmanClient();
-  if (!client.configured) {
-    res.status(400).json({ error: 'Spoolman is not configured.' });
-    return;
-  }
-
-  try {
-    const remoteSpool = await client.getSpoolById(spoolmanId);
-    res.json({ remoteSpool: mapRemoteSpool(remoteSpool) });
-  } catch (error) {
-    const message = error instanceof Error ? error.message : 'Failed to fetch remote spool.';
-    const status = error instanceof SpoolmanClientError && error.status === 404 ? 404 : 502;
-    res.status(status).json({ error: message });
-  }
-});
 
 // POST /api/inventory/spools — create spool
 app.post('/api/inventory/spools', requireAuth, (req, res) => {
@@ -1617,40 +1422,7 @@ app.put('/api/inventory/spools/:id', requireAuth, (req, res) => {
   res.json(mapSpool(spool));
 });
 
-app.post('/api/inventory/spools/:id/link-spoolman', requireAuth, (req, res) => {
-  const user = req.user as DbUser;
-  const spoolmanId = assertPositiveInteger(req.body?.spoolmanId);
-  if (!spoolmanId) {
-    res.status(400).json({ error: 'spoolmanId must be a positive integer.' });
-    return;
-  }
 
-  const spool = db
-    .prepare('SELECT * FROM filament_inventory WHERE id = ? AND user_id = ?')
-    .get(req.params.id, user.id) as DbSpool | undefined;
-  if (!spool) {
-    res.status(404).json({ error: 'Spool not found.' });
-    return;
-  }
-
-  const conflict = db
-    .prepare('SELECT id FROM filament_inventory WHERE user_id = ? AND spoolman_id = ? AND id != ?')
-    .get(user.id, spoolmanId, req.params.id) as { id: string } | undefined;
-  if (conflict) {
-    res.status(409).json({ error: 'Another spool is already linked to that Spoolman spool.' });
-    return;
-  }
-
-  const now = new Date().toISOString();
-  db.prepare(
-    `UPDATE filament_inventory
-     SET spoolman_id = ?, inventory_source = 'spoolman', linked_at = COALESCE(linked_at, ?), updated_at = ?
-     WHERE id = ? AND user_id = ?`
-  ).run(spoolmanId, now, now, req.params.id, user.id);
-
-  const updated = db.prepare('SELECT * FROM filament_inventory WHERE id = ?').get(req.params.id) as DbSpool;
-  res.json({ spool: mapSpool(updated) });
-});
 
 // DELETE /api/inventory/spools/:id — delete spool
 app.delete('/api/inventory/spools/:id', requireAuth, (req, res) => {
@@ -2879,32 +2651,7 @@ app.post('/api/lookup-filament', async (req, res) => {
     return;
   }
 
-  // 3. Resolve configured Spoolman QR labels without guessing commercial codes
-  const resolvedLabel = resolveInventoryLabel(trimmedCode, process.env.SPOOLMAN_BASE_URL);
-  if (resolvedLabel?.provider === 'spoolman') {
-    const client = createSpoolmanClient();
-
-    try {
-      const remoteSpool = await client.getSpoolById(resolvedLabel.spoolmanId);
-      const mappedRemoteSpool = mapRemoteSpool(remoteSpool);
-      const user = req.isAuthenticated() ? (req.user as DbUser) : null;
-      const linkedSpool = user ? getLinkedSpoolForUser(user.id, resolvedLabel.spoolmanId) : undefined;
-
-      res.json({
-        found: true,
-        source: 'spoolman' as const,
-        linked: Boolean(linkedSpool),
-        data: mappedRemoteSpool,
-        ...(linkedSpool ? { spool: mapSpool(linkedSpool) } : {}),
-      });
-      return;
-    } catch {
-      res.json({ found: false, source: 'manual' as const, linked: false, data: emptyData });
-      return;
-    }
-  }
-
-  // 4. Not found (Spoolman DB doesn't index by EAN/QR code, users can contribute manually)
+  // 3. Not found — users can contribute manually
   res.json({ found: false, source: 'manual' as const, linked: false, data: emptyData });
 });
 
