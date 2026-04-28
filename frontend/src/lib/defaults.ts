@@ -42,5 +42,7 @@ export const defaultFormValues: FormData = {
   otherCosts: [],
   profitPercentage: 20,
   vatPercentage: 0,
+  printedAt: '',
+  status: 'printed',
   filaments: [{ ...defaultFilamentRow }],
 };

@@ -38,6 +38,7 @@ export const formSchema = z.object({
 
   // == Calculator stats: print date for stats inclusion ==
   printedAt: z.string().optional().default(''),
+  status: z.enum(['pending', 'printed', 'post_processed', 'delivered', 'failed']).default('printed'),
 
   // == Optional Fields ==
   projectImage: z.string().optional(),

@@ -1,13 +1,27 @@
-export function escapeCsvValue(value: unknown): string {
-  const stringValue = String(value ?? '');
-  if (/[,"\n]/.test(stringValue)) {
-    return `"${stringValue.replace(/"/g, '""')}"`;
-  }
-  return stringValue;
+// ── CSV separator ─────────────────────────────────────────────────────────────
+// Excel uses the list separator from the OS locale. For es/pt/de/fr (decimal comma)
+// Excel expects ";" as CSV separator. For en/others it expects ",".
+// We detect it from the browser locale.
+export function getCsvSeparator(): ',' | ';' {
+  const lang = (navigator.language || 'en').toLowerCase();
+  const commaLocales = ['es', 'pt', 'de', 'fr', 'it', 'nl', 'pl', 'ru', 'tr'];
+  return commaLocales.some((l) => lang.startsWith(l)) ? ';' : ',';
 }
 
-export function buildCsv(rows: unknown[][]): string {
-  return rows.map((row) => row.map(escapeCsvValue).join(',')).join('\n');
+export function escapeCsvValue(value: unknown, sep: string): string {
+  const s = String(value ?? '');
+  // Quote if contains separator, quote char, or newline
+  if (s.includes(sep) || s.includes('"') || s.includes('\n')) {
+    return `"${s.replace(/"/g, '""')}"`;
+  }
+  return s;
+}
+
+export function buildCsv(rows: unknown[][], sep = getCsvSeparator()): string {
+  // BOM so Excel opens UTF-8 correctly on all platforms
+  const bom = '\uFEFF';
+  const body = rows.map((row) => row.map((v) => escapeCsvValue(v, sep)).join(sep)).join('\n');
+  return bom + body;
 }
 
 export function downloadTextFile(content: string, filename: string, mimeType: string): void {
