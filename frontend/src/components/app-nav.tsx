@@ -1,5 +1,5 @@
 import { NavLink, useMatch, useLocation } from 'react-router-dom';
-import { Calculator, BarChart3, LineChart, Package } from 'lucide-react';
+import { Calculator, BarChart3, LineChart, Package, Globe } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import { useAuth } from '@/context/auth-context';
 import { cn } from '@/lib/utils';
@@ -23,11 +23,12 @@ export function AppNav() {
     { to: '/bitacora',    icon: <BarChart3   className="h-4 w-4" />, label: t('tab_tracker'),    guestDisabled: true },
     { to: '/estadisticas',icon: <LineChart   className="h-4 w-4" />, label: t('tab_statistics'), guestDisabled: true },
     { to: '/inventario',  icon: <Package     className="h-4 w-4" />, label: t('tab_inventory') },
+    { to: '/recursos',    icon: <Globe       className="h-4 w-4" />, label: t('tab_recursos') },
   ];
 
   return (
     <nav
-      className="mb-7 grid h-auto w-full grid-cols-4 rounded-2xl border border-border/70 bg-card/60 backdrop-blur-md p-1.5 print:hidden dark:border-white/10"
+      className="mb-7 grid h-auto w-full grid-cols-5 rounded-2xl border border-border/70 bg-card/60 backdrop-blur-md p-1.5 print:hidden dark:border-white/10"
       aria-label="Navegación principal"
     >
       {items.map(({ to, icon, label, guestDisabled }) => {

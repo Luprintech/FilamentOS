@@ -79,7 +79,7 @@ function useContextualWelcome() {
 export function ChatBotBobina() {
   const { t, i18n } = useTranslation();
   const { toast } = useToast();
-  const { user, isAuthenticated, loginWithGoogle } = useAuth();
+  const { user, isAuthenticated, goToLogin } = useAuth();
   const welcomeMessage = useContextualWelcome();
   const [isOpen, setIsOpen] = useState(false);
   const [view, setView] = useState<View>('categories');
@@ -519,7 +519,7 @@ export function ChatBotBobina() {
                             {t('chatbot_login_required')}
                           </p>
                           <Button
-                            onClick={loginWithGoogle}
+                            onClick={goToLogin}
                             className="w-full"
                             variant="default"
                           >

@@ -51,7 +51,7 @@ export interface BitacoraContext {
 // ── Login gate ────────────────────────────────────────────────────────────────
 
 function LoginPrompt() {
-  const { loginWithGoogle } = useAuth();
+  const { goToLogin } = useAuth();
   const { t } = useTranslation();
   return (
     <div className="challenge-panel flex flex-col items-center justify-center gap-6 rounded-[24px] border border-white/[0.10] p-6 sm:p-10 text-center">
@@ -62,7 +62,7 @@ function LoginPrompt() {
         {t('tracker_login_text')}
       </p>
       <Button
-        onClick={loginWithGoogle}
+        onClick={goToLogin}
         className="challenge-btn-primary rounded-full px-6 font-extrabold"
         size="lg"
       >

@@ -1,7 +1,7 @@
 import { describe, it, expect, vi } from 'vitest';
 import { render, screen, fireEvent, waitFor } from '@testing-library/react';
 import type { ComponentProps, ReactNode } from 'react';
-import type { Spool, SpoolmanRemoteSpool } from '../types';
+import type { Spool } from '../types';
 
 vi.mock('react-i18next', () => ({
   useTranslation: () => ({
@@ -26,17 +26,6 @@ vi.mock('react-i18next', () => ({
         'inventory.materialOther': 'Otro material',
         'inventory.myBrands': 'Mis marcas',
         'inventory.myMaterials': 'Mis materiales',
-        'inventory.spoolman.linkSectionTitle': 'Vincular con Spoolman',
-        'inventory.spoolman.linkSectionHint': 'Buscá una bobina remota para asociarla.',
-        'inventory.spoolman.linkSpoolId': 'ID de Spoolman',
-        'inventory.spoolman.fetchRemote': 'Buscar bobina remota',
-        'inventory.spoolman.loadingRemote': 'Buscando...',
-        'inventory.spoolman.invalidId': 'Ingresá un ID válido.',
-        'inventory.spoolman.remotePreview': 'Bobina remota encontrada',
-        'inventory.spoolman.noRemoteName': 'Sin nombre remoto',
-        'inventory.spoolman.confirmLink': 'Vincular bobina',
-        'inventory.spoolman.linking': 'Vinculando...',
-        'inventory.spoolman.linkError': 'No se pudo vincular la bobina.',
         cancel: 'Cancelar',
         save_changes: 'Guardar cambios',
         cf_saving: 'Guardando...',
@@ -113,105 +102,26 @@ function renderForm(overrides: Partial<ComponentProps<typeof SpoolForm>> = {}) {
       editingSpool={overrides.editingSpool ?? createSpool()}
       customBrands={[]}
       customMaterials={[]}
-      spoolmanConfigured={overrides.spoolmanConfigured ?? true}
-      getRemoteSpool={overrides.getRemoteSpool}
-      onLinkSpoolman={overrides.onLinkSpoolman}
       prefill={overrides.prefill}
     />,
   );
 }
 
-describe('SpoolForm Spoolman linking', () => {
-  it('valida el ID antes de consultar Spoolman', async () => {
-    const getRemoteSpool = vi.fn();
-    renderForm({ getRemoteSpool, onLinkSpoolman: vi.fn() });
-
-    fireEvent.change(screen.getByLabelText('ID de Spoolman'), { target: { value: '0' } });
-    fireEvent.click(screen.getByRole('button', { name: 'Buscar bobina remota' }));
-
-    await waitFor(() => expect(screen.getByText('Ingresá un ID válido.')).toBeInTheDocument());
-    expect(getRemoteSpool).not.toHaveBeenCalled();
-  });
-
-  it('permite previsualizar y vincular una bobina remota', async () => {
-    const onClose = vi.fn();
-    const remoteSpool: SpoolmanRemoteSpool = {
-      spoolmanId: 77,
-      brand: 'Polymaker',
-      name: 'PolyLite PLA Pro',
-      material: 'PLA',
-      color: 'Orange',
-      colorHex: '#ff8800',
-      totalGrams: 1000,
-      remainingG: 640,
-      weightGrams: 1000,
-      diameter: null,
-      printTempMin: null,
-      printTempMax: null,
-      bedTempMin: null,
-      bedTempMax: null,
-      price: 31,
-      notes: 'Remote notes',
-    };
-    const getRemoteSpool = vi.fn().mockResolvedValue(remoteSpool);
-    const onLinkSpoolman = vi.fn().mockResolvedValue(createSpool({ inventorySource: 'spoolman', spoolmanId: 77 }));
-
-    renderForm({ onClose, getRemoteSpool, onLinkSpoolman });
-
-    fireEvent.change(screen.getByLabelText('ID de Spoolman'), { target: { value: '77' } });
-    fireEvent.click(screen.getByRole('button', { name: 'Buscar bobina remota' }));
-
-    await waitFor(() => expect(getRemoteSpool).toHaveBeenCalledWith(77));
-    expect(screen.getByText('Bobina remota encontrada')).toBeInTheDocument();
-    expect(screen.getByText('Polymaker · PLA')).toBeInTheDocument();
-
-    fireEvent.click(screen.getByRole('button', { name: 'Vincular bobina' }));
-
-    await waitFor(() => expect(onLinkSpoolman).toHaveBeenCalledWith('spool-1', 77));
-    expect(onClose).toHaveBeenCalledTimes(1);
-  });
-
-  it('mantiene el formulario abierto cuando falla la vinculación', async () => {
-    const onClose = vi.fn();
-    const getRemoteSpool = vi.fn().mockResolvedValue({
-      spoolmanId: 77,
-      brand: 'Polymaker',
-      name: 'PolyLite PLA Pro',
-      material: 'PLA',
-      color: 'Orange',
-      colorHex: '#ff8800',
-      totalGrams: 1000,
-      remainingG: 640,
-      weightGrams: 1000,
-      diameter: null,
-      printTempMin: null,
-      printTempMax: null,
-      bedTempMin: null,
-      bedTempMax: null,
-      price: 31,
-      notes: 'Remote notes',
-    } satisfies SpoolmanRemoteSpool);
-    const onLinkSpoolman = vi.fn().mockRejectedValue(new Error('No se pudo vincular la bobina.'));
-
-    renderForm({ onClose, getRemoteSpool, onLinkSpoolman });
-
-    fireEvent.change(screen.getByLabelText('ID de Spoolman'), { target: { value: '77' } });
-    fireEvent.click(screen.getByRole('button', { name: 'Buscar bobina remota' }));
-    await waitFor(() => expect(screen.getByRole('button', { name: 'Vincular bobina' })).toBeInTheDocument());
-
-    fireEvent.click(screen.getByRole('button', { name: 'Vincular bobina' }));
-
-    await waitFor(() => expect(screen.getByText('No se pudo vincular la bobina.')).toBeInTheDocument());
-    expect(onClose).not.toHaveBeenCalled();
-  });
-
-  it('oculta la sección de vínculo cuando la bobina ya proviene de Spoolman', () => {
+describe('SpoolForm', () => {
+  it('no muestra controles visibles de Spoolman durante la edición', () => {
     renderForm({
       editingSpool: createSpool({ inventorySource: 'spoolman', spoolmanId: 55 }),
-      getRemoteSpool: vi.fn(),
-      onLinkSpoolman: vi.fn(),
     });
 
-    expect(screen.queryByText('Vincular con Spoolman')).not.toBeInTheDocument();
+    expect(screen.queryByText(/Spoolman/i)).not.toBeInTheDocument();
+  });
+
+  it('mantiene el formulario base operativo para guardar cambios locales', async () => {
+    const onSubmit = vi.fn().mockResolvedValue(undefined);
+    renderForm({ onSubmit });
+
+    fireEvent.click(screen.getByRole('button', { name: 'Guardar cambios' }));
+
+    await waitFor(() => expect(onSubmit).toHaveBeenCalled());
   });
 });

@@ -1,5 +1,5 @@
 import React, { createContext, useContext, useEffect, useState, useCallback, ReactNode } from 'react';
-import { logoutAuth, logoutGuestSession, startGuestSession, type AuthUser } from '@/features/auth/api/auth-api';
+import { logoutAuth, logoutGuestSession, startGuestSession, registerUser, loginWithEmail, type AuthUser, type RegisterInput } from '@/features/auth/api/auth-api';
 import { useAuthUser } from '@/features/auth/api/use-auth';
 
 export type LocalUser = AuthUser;
@@ -8,16 +8,20 @@ const GUEST_KEY = 'filamentos_guest_session';
 const GUEST_PROJECT_KEY = 'filamentos_guest_pending_project';
 
 interface AuthContextType {
-  // Estado de autenticación
   user: LocalUser | null;
-  isAuthenticated: boolean;    // tiene cuenta real activa
-  isGuest: boolean;            // está en modo invitado real
+  isAuthenticated: boolean;
+  isGuest: boolean;
   guestId: string | null;
-  loading: boolean;            // alias de isLoading para compatibilidad
+  loading: boolean;
   isLoading: boolean;
+  authLoading: boolean;
 
-  // Acciones
   loginWithGoogle: () => void;
+  goToLogin: () => void;
+  loginWithEmail: (email: string, password: string) => Promise<void>;
+  /** Registra un usuario. Si el backend requiere verificación, `pending` es true y no inicia sesión. */
+  register: (input: RegisterInput) => Promise<{ pending: boolean }>;
+
   logout: () => Promise<void>;
   startGuest: () => Promise<void>;
   exitGuest: () => Promise<void>;
@@ -76,6 +80,34 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     window.location.href = '/api/auth/google';
   }, []);
 
+  const goToLogin = useCallback(() => {
+    window.location.href = '/login';
+  }, []);
+
+  const [authLoading, setAuthLoading] = useState(false);
+
+  const loginWithEmailFn = useCallback(async (email: string, password: string) => {
+    setAuthLoading(true);
+    try {
+      await loginWithEmail(email, password);
+      await refetch();
+    } finally {
+      setAuthLoading(false);
+    }
+  }, [refetch]);
+
+  const registerFn = useCallback(async (input: RegisterInput): Promise<{ pending: boolean }> => {
+    setAuthLoading(true);
+    try {
+      const result = await registerUser(input);
+      // Solo hace refetch si el usuario quedó logueado (no pending)
+      if (!result.pending) await refetch();
+      return { pending: result.pending };
+    } finally {
+      setAuthLoading(false);
+    }
+  }, [refetch]);
+
   const logout = useCallback(async () => {
     await logoutAuth();
     setGuestId(null);
@@ -111,9 +143,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         isAuthenticated,
         isGuest,
         guestId,
-        loading: isLoading,
+        loading: isLoading || authLoading,
         isLoading,
+        authLoading,
         loginWithGoogle,
+        goToLogin,
+        loginWithEmail: loginWithEmailFn,
+        register: registerFn,
         logout,
         startGuest,
         exitGuest,

@@ -140,3 +140,14 @@ export async function apiReorderPieces(projectId: string, orderedIds: string[]):
     jsonRequest('POST', { orderedIds }),
   );
 }
+
+export async function apiTogglePieceDisabled(
+  projectId: string,
+  pieceId: string,
+  disabled: boolean,
+): Promise<void> {
+  await apiFetch<unknown>(
+    `/api/tracker/projects/${projectId}/pieces/${pieceId}/disabled`,
+    jsonRequest('PATCH', { disabled }),
+  );
+}

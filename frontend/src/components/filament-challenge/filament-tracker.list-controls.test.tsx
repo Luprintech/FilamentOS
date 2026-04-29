@@ -100,7 +100,11 @@ vi.mock('./use-filament-storage', () => ({
   }),
 }));
 
-vi.mock('./challenge-hero', () => ({ ChallengeHero: () => <div>Hero</div> }));
+vi.mock('./challenge-hero', () => ({
+  ChallengeHero: ({ onViewPieces }: { onViewPieces?: () => void }) => (
+    <button type="button" onClick={onViewPieces}>View pieces</button>
+  ),
+}));
 vi.mock('./challenge-form', () => ({ ChallengeForm: () => <div>Form</div> }));
 
 // Mock captures props AND exposes controls to simulate callbacks
@@ -138,10 +142,14 @@ vi.mock('@/components/login-required-modal', () => ({ LoginRequiredModal: () => 
 vi.mock('@/data/mockData', () => ({ mockTrackerProjects: [], mockTrackerPieces: [], toFilamentProject: vi.fn() }));
 
 describe('FilamentTracker list controls', () => {
-  it('passes sort and view mode to piece list, and propagates changes via callbacks', () => {
+  it('renders list controls in pieces view and propagates changes via callbacks', () => {
     render(<FilamentTracker />);
 
     fireEvent.click(screen.getByRole('button', { name: 'Open project' }));
+
+    expect(screen.queryByTestId('sort-mode')).not.toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('button', { name: 'View pieces' }));
 
     // Default state: date-desc + grid
     expect(screen.getByTestId('sort-mode')).toHaveTextContent('date-desc');

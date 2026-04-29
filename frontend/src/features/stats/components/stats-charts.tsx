@@ -103,9 +103,27 @@ function TrendChart({ data }: { data: StatsTimePoint[] }) {
 
   if (!formatted.length) return <EmptyChart />;
 
+  // Single data point — area chart can't draw a line, use dual-axis bar instead
+  if (formatted.length === 1) {
+    return (
+      <ResponsiveContainer width="100%" height={220}>
+        <BarChart data={formatted} margin={{ top: 4, right: 24, bottom: 0, left: 0 }}>
+          <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.06)" />
+          <XAxis dataKey="periodLabel" tick={{ fontSize: 10 }} />
+          <YAxis yAxisId="left"  tick={{ fontSize: 10 }} />
+          <YAxis yAxisId="right" orientation="right" tick={{ fontSize: 10 }} />
+          <Tooltip content={<ChartTooltip />} />
+          <Legend wrapperStyle={{ fontSize: 11 }} />
+          <Bar yAxisId="left"  dataKey="pieces" name={t('stats_chart_pieces')} fill="#3b82f6" radius={[6,6,0,0]} />
+          <Bar yAxisId="right" dataKey="kg"     name={t('stats_chart_kg')}     fill="#10b981" radius={[6,6,0,0]} />
+        </BarChart>
+      </ResponsiveContainer>
+    );
+  }
+
   return (
     <ResponsiveContainer width="100%" height={220}>
-      <AreaChart data={formatted} margin={{ top: 4, right: 4, bottom: 0, left: 0 }}>
+      <AreaChart data={formatted} margin={{ top: 4, right: 24, bottom: 0, left: 0 }}>
         <defs>
           <linearGradient id="gPieces" x1="0" y1="0" x2="0" y2="1">
             <stop offset="5%"  stopColor="#3b82f6" stopOpacity={0.35} />
@@ -118,11 +136,12 @@ function TrendChart({ data }: { data: StatsTimePoint[] }) {
         </defs>
         <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.06)" />
         <XAxis dataKey="periodLabel" tick={{ fontSize: 10 }} />
-        <YAxis tick={{ fontSize: 10 }} />
+        <YAxis yAxisId="left"  tick={{ fontSize: 10 }} />
+        <YAxis yAxisId="right" orientation="right" tick={{ fontSize: 10 }} />
         <Tooltip content={<ChartTooltip />} />
         <Legend wrapperStyle={{ fontSize: 11 }} />
-        <Area type="monotone" dataKey="pieces" name={t('stats_chart_pieces')} stroke="#3b82f6" fill="url(#gPieces)" strokeWidth={2} dot={false} activeDot={{ r: 4, strokeWidth: 0 }} />
-        <Area type="monotone" dataKey="kg"     name={t('stats_chart_kg')}     stroke="#10b981" fill="url(#gKg)"     strokeWidth={2} dot={false} activeDot={{ r: 4, strokeWidth: 0 }} />
+        <Area yAxisId="left"  type="monotone" dataKey="pieces" name={t('stats_chart_pieces')} stroke="#3b82f6" fill="url(#gPieces)" strokeWidth={2} dot={false} activeDot={{ r: 4, strokeWidth: 0 }} />
+        <Area yAxisId="right" type="monotone" dataKey="kg"     name={t('stats_chart_kg')}     stroke="#10b981" fill="url(#gKg)"     strokeWidth={2} dot={false} activeDot={{ r: 4, strokeWidth: 0 }} />
       </AreaChart>
     </ResponsiveContainer>
   );
@@ -143,6 +162,21 @@ function CumulativeChart({ data }: { data: StatsTimePoint[] }) {
   }, [data]);
 
   if (!cumulative.length) return <EmptyChart />;
+
+  if (cumulative.length === 1) {
+    return (
+      <ResponsiveContainer width="100%" height={220}>
+        <BarChart data={cumulative} margin={{ top: 4, right: 4, bottom: 0, left: 0 }}>
+          <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.06)" />
+          <XAxis dataKey="periodLabel" tick={{ fontSize: 10 }} />
+          <YAxis tick={{ fontSize: 10 }} />
+          <Tooltip content={<ChartTooltip />} />
+          <Legend wrapperStyle={{ fontSize: 11 }} />
+          <Bar dataKey="pieces" name={t('stats_chart_cumulative_pieces')} fill="#8b5cf6" radius={[6,6,0,0]} />
+        </BarChart>
+      </ResponsiveContainer>
+    );
+  }
 
   return (
     <ResponsiveContainer width="100%" height={220}>
@@ -278,11 +312,11 @@ function ProjectRanking({ byProject }: { byProject: StatsProjectRow[] }) {
                 key={row.projectId}
                 type="button"
                 onClick={() => {
-                  if (row.projectId !== 'calc_projects') {
+                  if (row.source !== 'calculator') {
                     navigate(`/bitacora/${row.projectId}`);
                   }
                 }}
-                className={`group w-full text-left ${row.projectId === 'calc_projects' ? 'cursor-default' : ''}`}
+                className={`group w-full text-left ${row.source === 'calculator' ? 'cursor-default' : ''}`}
               >
               <div className="flex items-center justify-between gap-3 mb-1">
                 <div className="flex items-center gap-2 min-w-0">

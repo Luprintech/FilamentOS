@@ -20,8 +20,6 @@ vi.mock('react-i18next', () => ({
         scan_ios_hint: 'Necesitás HTTPS y permisos de cámara para escanear.',
         scan_camera_error: 'No se pudo iniciar la cámara.',
         scan_source_manual: 'Sin datos registrados',
-        scan_source_spoolman: 'Spoolman',
-        'inventory.scanner.spoolmanDetected': 'Etiqueta de Spoolman detectada. Podés crear una bobina nueva o vincularla con una existente.',
         'inventory.scanner.notLinked': 'Código comercial sin vínculo en tu inventario.',
       };
       return translations[key] ?? key;
@@ -70,7 +68,7 @@ describe('BarcodeScannerModal Spoolman lookup UX', () => {
     vi.unstubAllGlobals();
   });
 
-  it('distingue una etiqueta QR de Spoolman y muestra el mensaje de vínculo', async () => {
+  it('distingue una etiqueta QR de Spoolman sin exponer textos visibles de Spoolman', async () => {
     vi.stubGlobal('fetch', vi.fn().mockResolvedValue({
       ok: true,
       json: async () => ({
@@ -100,7 +98,7 @@ describe('BarcodeScannerModal Spoolman lookup UX', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Activar cámara' }));
 
     await waitFor(() => expect(screen.getByText('Polymaker')).toBeInTheDocument());
-    expect(screen.getByText('Etiqueta de Spoolman detectada. Podés crear una bobina nueva o vincularla con una existente.')).toBeInTheDocument();
+    expect(screen.queryByText(/Spoolman/i)).not.toBeInTheDocument();
   });
 
   it('muestra fallback manual cuando el código comercial no está vinculado', async () => {

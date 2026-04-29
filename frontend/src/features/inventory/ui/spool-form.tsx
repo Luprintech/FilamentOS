@@ -17,7 +17,7 @@ import {
   SelectValue,
 } from '@/components/ui/select';
 import { useTranslation } from 'react-i18next';
-import type { Spool, SpoolInput, SpoolmanRemoteSpool } from '../types';
+import type { Spool, SpoolInput } from '../types';
 
 // ── Listas de marcas y materiales ─────────────────────────────────────────────
 
@@ -89,9 +89,6 @@ interface SpoolFormProps {
   customBrands?: string[];
   customMaterials?: string[];
   prefill?: Partial<SpoolFormValues>;
-  spoolmanConfigured?: boolean;
-  getRemoteSpool?: (spoolmanId: number) => Promise<SpoolmanRemoteSpool>;
-  onLinkSpoolman?: (id: string, spoolmanId: number) => Promise<Spool>;
 }
 
 // ── Component ──────────────────────────────────────────────────────────────────
@@ -104,17 +101,9 @@ export function SpoolForm({
   customBrands = [],
   customMaterials = [],
   prefill,
-  spoolmanConfigured = false,
-  getRemoteSpool,
-  onLinkSpoolman,
 }: SpoolFormProps) {
   const { t } = useTranslation();
   const isEditing = Boolean(editingSpool);
-  const [spoolmanIdInput, setSpoolmanIdInput] = React.useState('');
-  const [remotePreview, setRemotePreview] = React.useState<SpoolmanRemoteSpool | null>(null);
-  const [remoteLoading, setRemoteLoading] = React.useState(false);
-  const [remoteError, setRemoteError] = React.useState('');
-  const [linkLoading, setLinkLoading] = React.useState(false);
 
   // Custom options that are NOT already in the predefined lists
   const uniqueCustomBrands = React.useMemo(
@@ -162,48 +151,9 @@ export function SpoolForm({
       reset(defaults);
       setBrandSelectVal(resolveSelectValue(defaults.brand, allKnownBrands));
       setMaterialSelectVal(resolveSelectValue(defaults.material, allKnownMaterials));
-      setSpoolmanIdInput(editingSpool?.spoolmanId?.toString() ?? '');
-      setRemotePreview(null);
-      setRemoteError('');
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open, editingSpool, reset]);
-
-  async function handleFetchRemoteSpool() {
-    const parsed = Number(spoolmanIdInput);
-    if (!Number.isInteger(parsed) || parsed <= 0 || !getRemoteSpool) {
-      setRemotePreview(null);
-      setRemoteError(t('inventory.spoolman.invalidId'));
-      return;
-    }
-
-    setRemoteLoading(true);
-    setRemoteError('');
-    try {
-      const remote = await getRemoteSpool(parsed);
-      setRemotePreview(remote);
-    } catch (error) {
-      setRemotePreview(null);
-      setRemoteError(error instanceof Error ? error.message : t('inventory.spoolman.fetchError'));
-    } finally {
-      setRemoteLoading(false);
-    }
-  }
-
-  async function handleLinkSpoolman() {
-    if (!editingSpool || !remotePreview || !onLinkSpoolman) return;
-
-    setLinkLoading(true);
-    setRemoteError('');
-    try {
-      await onLinkSpoolman(editingSpool.id, remotePreview.spoolmanId);
-      onClose();
-    } catch (error) {
-      setRemoteError(error instanceof Error ? error.message : t('inventory.spoolman.linkError'));
-    } finally {
-      setLinkLoading(false);
-    }
-  }
 
   function handleBrandSelect(val: string) {
     setBrandSelectVal(val);
@@ -381,58 +331,6 @@ export function SpoolForm({
             </Label>
             <Textarea id="inv-notes" placeholder={t('inventory.notesPlaceholder')} rows={2} {...register('notes')} />
           </div>
-
-          {editingSpool?.inventorySource === 'spoolman' && (
-            <div className="rounded-xl border border-amber-400/30 bg-amber-400/10 px-3 py-2 text-sm text-amber-200">
-              {t('inventory.spoolman.overwriteWarning')}
-            </div>
-          )}
-
-          {isEditing && editingSpool?.inventorySource === 'local' && spoolmanConfigured && getRemoteSpool && onLinkSpoolman && (
-            <div className="space-y-3 rounded-xl border border-border/60 bg-muted/20 p-4">
-              <div>
-                <p className="text-sm font-semibold text-foreground">{t('inventory.spoolman.linkSectionTitle')}</p>
-                <p className="text-xs text-muted-foreground">{t('inventory.spoolman.linkSectionHint')}</p>
-              </div>
-
-              <div className="grid gap-3 sm:grid-cols-[minmax(0,1fr)_auto] sm:items-end">
-                <div className="space-y-1.5">
-                  <Label htmlFor="spoolman-link-id" className="text-xs font-bold uppercase tracking-wider text-muted-foreground">
-                    {t('inventory.spoolman.linkSpoolId')}
-                  </Label>
-                  <Input
-                    id="spoolman-link-id"
-                    type="number"
-                    min="1"
-                    value={spoolmanIdInput}
-                    onChange={(event) => setSpoolmanIdInput(event.target.value)}
-                  />
-                </div>
-                <Button type="button" variant="outline" onClick={() => void handleFetchRemoteSpool()} disabled={remoteLoading}>
-                  {remoteLoading ? t('inventory.spoolman.loadingRemote') : t('inventory.spoolman.fetchRemote')}
-                </Button>
-              </div>
-
-              {remoteError && <p className="text-sm text-destructive">{remoteError}</p>}
-
-              {remotePreview && (
-                <div className="space-y-3 rounded-xl border border-border/60 bg-background/70 p-3">
-                  <div>
-                    <p className="text-sm font-semibold text-foreground">{t('inventory.spoolman.remotePreview')}</p>
-                    <p className="text-xs text-muted-foreground">
-                      {remotePreview.brand} · {remotePreview.material}
-                    </p>
-                  </div>
-                  <div className="text-xs text-muted-foreground">
-                    {remotePreview.name ?? t('inventory.spoolman.noRemoteName')}
-                  </div>
-                  <Button type="button" onClick={() => void handleLinkSpoolman()} disabled={linkLoading}>
-                    {linkLoading ? t('inventory.spoolman.linking') : t('inventory.spoolman.confirmLink')}
-                  </Button>
-                </div>
-              )}
-            </div>
-          )}
 
           {/* ── URL tienda ────────────────────────────────────────────────── */}
           <div className="space-y-1.5">

@@ -3,6 +3,21 @@ import { render, screen } from '@testing-library/react';
 import { ChallengePieceList, sortPieces } from './challenge-piece-list';
 import type { FilamentPiece, FilamentProject } from './filament-types';
 
+vi.mock('@/components/ui/select', () => ({
+  Select: ({ value, onValueChange, children }: { value: string; onValueChange: (value: string) => void; children: React.ReactNode }) => (
+    <div data-testid="mock-select" data-value={value}>
+      <button type="button" onClick={() => onValueChange(value)}>
+        current:{value}
+      </button>
+      {children}
+    </div>
+  ),
+  SelectTrigger: ({ children, className }: { children: React.ReactNode; className?: string }) => <button type="button" className={className}>{children}</button>,
+  SelectValue: () => null,
+  SelectContent: ({ children }: { children: React.ReactNode }) => <div>{children}</div>,
+  SelectItem: ({ value, children }: { value: string; children: React.ReactNode }) => <div data-value={value}>{children}</div>,
+}));
+
 vi.mock('react-i18next', () => ({
   useTranslation: () => ({
     t: (key: string, params?: Record<string, unknown>) => {

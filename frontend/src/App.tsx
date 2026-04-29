@@ -12,6 +12,7 @@ import { IosInstallBanner } from '@/components/ios-install-banner';
 import { useCookieConsent } from '@/hooks/use-cookie-consent';
 import { AppLayout } from '@/components/app-layout';
 import { HomePage } from '@/pages/HomePage';
+import { LoginPage } from '@/components/login-page';
 import { CalculadoraPage } from '@/pages/CalculadoraPage';
 import { CalculadoraPdfPage } from '@/pages/CalculadoraPdfPage';
 import { EstadisticasPage } from '@/pages/EstadisticasPage';
@@ -23,6 +24,8 @@ import { ProjectDetailPage } from '@/pages/bitacora/ProjectDetailPage';
 import { NuevaPiezaPage } from '@/pages/bitacora/NuevaPiezaPage';
 import { PiezasPage } from '@/pages/bitacora/PiezasPage';
 import { BitacoraPdfPage } from '@/pages/bitacora/BitacoraPdfPage';
+import { RecursosPage } from '@/pages/RecursosPage';
+import { LupePage } from '@/pages/LupePage';
 
 // ── Loading spinner ───────────────────────────────────────────────────────────
 function FullPageLoader() {
@@ -58,6 +61,9 @@ function AppRoutes() {
       <Routes>
         <Route path="/" element={<RootRoute />} />
 
+        {/* Login page — accesible sin autenticación */}
+        <Route path="/login" element={<LoginPage />} />
+
         <Route
           element={
             <ProtectedRoute>
@@ -77,7 +83,11 @@ function AppRoutes() {
           </Route>
           <Route path="/estadisticas" element={<EstadisticasPage />} />
           <Route path="/inventario"   element={<InventarioPage />} />
+          <Route path="/recursos"     element={<RecursosPage />} />
         </Route>
+
+        {/* Panel privado — fuera del AppLayout y del ProtectedRoute */}
+        <Route path="/lupe" element={<LupePage />} />
 
         <Route path="*" element={<Navigate to="/" replace />} />
       </Routes>

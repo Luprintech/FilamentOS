@@ -1,7 +1,8 @@
 import React, { useState, useMemo, useRef, useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
-import { Package, Plus, AlertTriangle, ScanLine, ChevronLeft, ChevronRight } from 'lucide-react';
+import { Package, Plus, AlertTriangle, ScanLine } from 'lucide-react';
 import { Button } from '@/components/ui/button';
+import { PaginationBar } from '@/components/ui/pagination-bar';
 import { Skeleton } from '@/components/ui/skeleton';
 import { useInventory } from '../api/use-inventory';
 import { SpoolCard } from './spool-card';
@@ -54,15 +55,11 @@ export function InventoryDashboard({ userId, authLoading }: InventoryDashboardPr
     error,
     customBrands,
     customMaterials,
-    spoolmanStatus,
     createSpool,
     updateSpool,
     deleteSpool,
     deductSpool,
     finishSpool,
-    syncSpoolman,
-    getRemoteSpool,
-    linkSpoolman,
   } =
     useInventory({ userId, authLoading });
 
@@ -73,8 +70,6 @@ export function InventoryDashboard({ userId, authLoading }: InventoryDashboardPr
   const [scannerOpen, setScannerOpen]     = useState(false);
   const [scanPrefill, setScanPrefill]     = useState<Partial<ScannerFillData> | null>(null);
   const [loginModalOpen, setLoginModalOpen] = useState(false);
-  const [syncFeedback, setSyncFeedback] = useState<string | null>(null);
-  const [syncing, setSyncing] = useState(false);
 
   // ── Pagination ────────────────────────────────────────────────────────────────
   const [page, setPage]   = useState(1);
@@ -162,26 +157,6 @@ export function InventoryDashboard({ userId, authLoading }: InventoryDashboardPr
     await finishSpool(id);
   }
 
-  async function handleSyncSpoolman() {
-    setSyncing(true);
-    try {
-      const result = await syncSpoolman();
-      setSyncFeedback(t('inventory.spoolman.syncSuccess', { ...result }));
-    } catch (syncError) {
-      setSyncFeedback(syncError instanceof Error ? syncError.message : t('inventory.spoolman.syncError'));
-    } finally {
-      setSyncing(false);
-    }
-  }
-
-  const spoolmanBannerMessage = spoolmanStatus?.state === 'degraded'
-    ? t('inventory.spoolman.banner.degraded')
-    : spoolmanStatus?.state === 'connected'
-    ? t('inventory.spoolman.banner.connected')
-    : spoolmanStatus?.state === 'unconfigured'
-    ? t('inventory.spoolman.banner.unconfigured')
-    : null;
-
   // ── Render ────────────────────────────────────────────────────────────────────
 
   if (!userId && !authLoading && !isGuest) {
@@ -200,31 +175,25 @@ export function InventoryDashboard({ userId, authLoading }: InventoryDashboardPr
         <GuestBanner message=" Inventario de ejemplo. Inicia sesión para gestionar tus bobinas reales." />
       )}
 
-      {/* Header */}
-      <div className="flex flex-wrap items-center justify-between gap-3">
-        <div>
-          <h2 className="text-xl font-black text-foreground sm:text-2xl">{t('inventory.title')}</h2>
-          <p className="text-sm text-muted-foreground">{t('inventory.subtitle')}</p>
-        </div>
-        <div className="flex gap-2">
-          <Button
-            variant="outline"
-            onClick={() => isGuest ? setLoginModalOpen(true) : setScannerOpen(true)}
-            className={`rounded-full font-bold ${isGuest ? 'cursor-not-allowed opacity-50' : ''}`}
-            title={isGuest ? 'Inicia sesión para gestionar tu inventario' : undefined}
-          >
-            <ScanLine className="mr-1.5 h-4 w-4" />
-            <span className="hidden sm:inline">{t('scan_btn')}</span>
-          </Button>
-          <Button
-            onClick={handleOpenAdd}
-            className={`rounded-full font-bold ${isGuest ? 'cursor-not-allowed opacity-50' : ''}`}
-            title={isGuest ? 'Inicia sesión para gestionar tu inventario' : undefined}
-          >
-            <Plus className="mr-1.5 h-4 w-4" />
-            {t('inventory.addSpool')}
-          </Button>
-        </div>
+      {/* Action bar — page title/subtitle live in the unified PageHeader above */}
+      <div className="flex flex-wrap items-center justify-end gap-2">
+        <Button
+          variant="outline"
+          onClick={() => isGuest ? setLoginModalOpen(true) : setScannerOpen(true)}
+          className={`rounded-full font-bold ${isGuest ? 'cursor-not-allowed opacity-50' : ''}`}
+          title={isGuest ? 'Inicia sesión para gestionar tu inventario' : undefined}
+        >
+          <ScanLine className="mr-1.5 h-4 w-4" />
+          <span className="hidden sm:inline">{t('scan_btn')}</span>
+        </Button>
+        <Button
+          onClick={handleOpenAdd}
+          className={`rounded-full font-bold ${isGuest ? 'cursor-not-allowed opacity-50' : ''}`}
+          title={isGuest ? 'Inicia sesión para gestionar tu inventario' : undefined}
+        >
+          <Plus className="mr-1.5 h-4 w-4" />
+          {t('inventory.addSpool')}
+        </Button>
       </div>
 
       {/* Metrics */}
@@ -244,30 +213,6 @@ export function InventoryDashboard({ userId, authLoading }: InventoryDashboardPr
         <div className="flex items-center gap-2 rounded-xl border border-orange-400/30 bg-orange-400/8 px-4 py-3 text-sm text-orange-400">
           <AlertTriangle className="h-4 w-4 shrink-0" />
           <span>{t('inventory.lowStockWarning', { count: lowStockCount })}</span>
-        </div>
-      )}
-
-      {!isGuest && spoolmanStatus && spoolmanBannerMessage && (
-        <div className="rounded-2xl border border-border/60 bg-card/60 px-4 py-3">
-          <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-            <div className="space-y-1">
-              <p className="text-sm font-semibold text-foreground">{spoolmanBannerMessage}</p>
-              {spoolmanStatus.endpoint && (
-                <p className="text-xs text-muted-foreground">{spoolmanStatus.endpoint}</p>
-              )}
-              {spoolmanStatus.error && (
-                <p className="text-xs text-muted-foreground">{spoolmanStatus.error}</p>
-              )}
-              {syncFeedback && (
-                <p className="text-xs text-muted-foreground">{syncFeedback}</p>
-              )}
-            </div>
-            {spoolmanStatus.configured && (
-              <Button type="button" variant="outline" onClick={() => void handleSyncSpoolman()} disabled={syncing}>
-                {syncing ? t('inventory.spoolman.syncing') : t('inventory.spoolman.sync')}
-              </Button>
-            )}
-          </div>
         </div>
       )}
 
@@ -347,58 +292,13 @@ export function InventoryDashboard({ userId, authLoading }: InventoryDashboardPr
           </div>
 
           {/* Pagination controls */}
-          {totalPages > 1 && (
-            <div className="flex items-center justify-between gap-3 rounded-xl border border-border/50 bg-card/30 px-4 py-3">
-              <span className="text-xs font-semibold text-muted-foreground">
-                {t('inventory.page', {
-                  current: safePage,
-                  total:   totalPages,
-                  defaultValue: `Página ${safePage} de ${totalPages}`,
-                })}
-                {' · '}
-                {filtered.length}{' '}
-                {t('inventory.spoolCount', { defaultValue: 'bobinas' })}
-              </span>
-
-              <div className="flex gap-1.5">
-                <Button
-                  variant="outline"
-                  size="icon"
-                  className="h-8 w-8 rounded-full"
-                  onClick={() => setPage((p) => Math.max(1, p - 1))}
-                  disabled={safePage === 1}
-                  aria-label={t('pagination.prev', { defaultValue: 'Anterior' })}
-                >
-                  <ChevronLeft className="h-4 w-4" />
-                </Button>
-
-                {Array.from({ length: totalPages }, (_, i) => i + 1).map((n) => (
-                  <Button
-                    key={n}
-                    variant={n === safePage ? 'default' : 'outline'}
-                    size="icon"
-                    className="h-8 w-8 rounded-full text-xs font-bold"
-                    onClick={() => setPage(n)}
-                    aria-label={`Página ${n}`}
-                    aria-current={n === safePage ? 'page' : undefined}
-                  >
-                    {n}
-                  </Button>
-                ))}
-
-                <Button
-                  variant="outline"
-                  size="icon"
-                  className="h-8 w-8 rounded-full"
-                  onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
-                  disabled={safePage === totalPages}
-                  aria-label={t('pagination.next', { defaultValue: 'Siguiente' })}
-                >
-                  <ChevronRight className="h-4 w-4" />
-                </Button>
-              </div>
-            </div>
-          )}
+          <PaginationBar
+            page={safePage}
+            totalPages={totalPages}
+            totalItems={filtered.length}
+            itemLabel={t('inventory.spoolCount', { defaultValue: 'bobinas' })}
+            onChange={setPage}
+          />
         </div>
       )}
 
@@ -412,9 +312,6 @@ export function InventoryDashboard({ userId, authLoading }: InventoryDashboardPr
           customBrands={customBrands}
           customMaterials={customMaterials}
           prefill={scanPrefill ?? undefined}
-          spoolmanConfigured={spoolmanStatus?.configured ?? false}
-          getRemoteSpool={getRemoteSpool}
-          onLinkSpoolman={linkSpoolman}
         />
       )}
 

@@ -12,8 +12,6 @@ vi.mock('react-i18next', () => ({
         'inventory.totalGrams': 'Total',
         'inventory.price': 'Precio',
         'inventory.buyLink': 'Comprar',
-        'inventory.source.local': 'Local',
-        'inventory.source.spoolman': 'Spoolman',
       };
       return translations[key] ?? key;
     },
@@ -44,8 +42,8 @@ function createSpool(overrides: Partial<Spool> = {}): Spool {
   };
 }
 
-describe('SpoolCard source badges', () => {
-  it('muestra la procedencia local para bobinas sin vínculo remoto', () => {
+describe('SpoolCard', () => {
+  it('no muestra badges de procedencia del inventario', () => {
     render(
       <SpoolCard
         spool={createSpool({ inventorySource: 'local', spoolmanId: null })}
@@ -56,21 +54,8 @@ describe('SpoolCard source badges', () => {
       />,
     );
 
-    expect(screen.getByText('Local')).toBeInTheDocument();
-  });
-
-  it('muestra la procedencia Spoolman para bobinas sincronizadas', () => {
-    render(
-      <SpoolCard
-        spool={createSpool({ inventorySource: 'spoolman', spoolmanId: 55 })}
-        onEdit={vi.fn()}
-        onDelete={vi.fn()}
-        onDeduct={vi.fn()}
-        onFinish={vi.fn()}
-      />,
-    );
-
-    expect(screen.getByText('Spoolman')).toBeInTheDocument();
+    expect(screen.queryByText('Local')).not.toBeInTheDocument();
+    expect(screen.queryByText('Spoolman')).not.toBeInTheDocument();
   });
 
   it('expone el enlace de compra cuando la bobina tiene shopUrl', () => {
@@ -163,7 +148,6 @@ describe('SpoolCard source badges', () => {
     );
 
     expect(screen.getByText('Terminada')).toBeInTheDocument();
-    expect(screen.getByText('Spoolman')).toBeInTheDocument();
     expect(screen.queryByText(/inventory.deduct/i)).not.toBeInTheDocument();
     expect(screen.queryByText(/inventory.markFinished/i)).not.toBeInTheDocument();
 

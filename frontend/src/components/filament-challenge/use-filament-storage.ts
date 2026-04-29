@@ -3,6 +3,7 @@ import { useQueryClient } from '@tanstack/react-query';
 import {
   apiGetProjects, apiCreateProject, apiUpdateProject, apiDeleteProject,
   apiGetPieces, apiCreatePiece, apiUpdatePiece, apiDeletePiece, apiReorderPieces,
+  apiTogglePieceDisabled,
   TrackerApiError,
 } from './tracker-api';
 import type { FilamentProject, FilamentPiece } from './filament-types';
@@ -337,6 +338,22 @@ export function useFilamentStorage({ authLoading, userId }: FilamentStorageOptio
     });
   }, [activeId, userId]);
 
+  const togglePieceDisabled = useCallback(async (id: string) => {
+    if (!activeId || !userId) return;
+    const piece = pieces.find((p) => p.id === id);
+    if (!piece) return;
+    const newDisabled = !piece.disabled;
+    // Optimistic update
+    setPieces((prev) => prev.map((p) => p.id === id ? { ...p, disabled: newDisabled } : p));
+    try {
+      await apiTogglePieceDisabled(activeId, id, newDisabled);
+      void queryClient.invalidateQueries({ queryKey: ['stats'] });
+    } catch {
+      // Revert on error
+      setPieces((prev) => prev.map((p) => p.id === id ? { ...p, disabled: piece.disabled } : p));
+    }
+  }, [activeId, userId, pieces, queryClient]);
+
   return {
     // state
     loading,
@@ -354,5 +371,6 @@ export function useFilamentStorage({ authLoading, userId }: FilamentStorageOptio
     updatePiece,
     deletePiece,
     reorderPieces,
+    togglePieceDisabled,
   };
 }

@@ -23,11 +23,33 @@ export function parseTimeToSeconds(line: string): number | null {
   return total > 0 ? total : null;
 }
 
+/** Convierte segundos a "Xh Ym" (sin segundos). */
 export function secsToString(totalSecs: number): string {
   const h = Math.floor(totalSecs / 3600);
   const m = Math.floor((totalSecs % 3600) / 60);
-  const s = totalSecs % 60;
-  return `${h}h ${m}m ${s}s`;
+  if (h === 0) return `${m}m`;
+  if (m === 0) return `${h}h`;
+  return `${h}h ${m}m`;
+}
+
+/**
+ * Igual que secsToString pero cuando supera 24 h muestra días:
+ * "2d 3h 15m", "1d 12h", etc.
+ */
+export function secsToLongString(totalSecs: number): string {
+  const totalMins = Math.floor(totalSecs / 60);
+  const d = Math.floor(totalMins / (24 * 60));
+  const h = Math.floor((totalMins % (24 * 60)) / 60);
+  const m = totalMins % 60;
+  if (d === 0) {
+    if (h === 0) return `${m}m`;
+    if (m === 0) return `${h}h`;
+    return `${h}h ${m}m`;
+  }
+  const parts = [`${d}d`];
+  if (h > 0) parts.push(`${h}h`);
+  if (m > 0) parts.push(`${m}m`);
+  return parts.join(' ');
 }
 
 export interface ParsedTime  { totalSecs: number;  validLines: number }
@@ -59,10 +81,12 @@ export function computeProjectStats(
   pieces: FilamentPiece[],
   project: FilamentProject
 ): ProjectStats {
-  const totalPieces = pieces.length;
-  const totalSecs   = pieces.reduce((a, p) => a + p.totalSecs, 0);
-  const totalGrams  = pieces.reduce((a, p) => a + p.totalGrams, 0);
-  const totalCost   = pieces.reduce((a, p) => a + p.totalCost, 0);
+  // Las piezas desactivadas no cuentan en los totales
+  const active      = pieces.filter((p) => !p.disabled);
+  const totalPieces = active.length;
+  const totalSecs   = active.reduce((a, p) => a + p.totalSecs, 0);
+  const totalGrams  = active.reduce((a, p) => a + p.totalGrams, 0);
+  const totalCost   = active.reduce((a, p) => a + p.totalCost, 0);
   const progressPct = project.goal > 0
     ? Math.min(Math.round((totalPieces / project.goal) * 100), 100)
     : 0;

@@ -8,12 +8,14 @@ import {
   type GridActionMode,
   type GridDensity,
 } from '@/components/grid-density-control';
-import { ArrowUp, ArrowDown, ExternalLink, GripVertical, List, LayoutGrid, Search, X as XIcon, ChevronLeft, ChevronRight, Pencil, Trash2 } from 'lucide-react';
+import { ArrowUp, ArrowDown, ExternalLink, GripVertical, List, LayoutGrid, Search, X as XIcon, Pencil, Trash2, EyeOff, Eye } from 'lucide-react';
+import { PaginationBar } from '@/components/ui/pagination-bar';
 import {
   Dialog, DialogContent, DialogHeader, DialogTitle,
   DialogDescription, DialogFooter, DialogClose,
 } from '@/components/ui/dialog';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { cn } from '@/lib/utils';
 import { secsToString, formatCost } from './filament-storage';
 import type { FilamentPiece, FilamentProject, EditingState } from './filament-types';
@@ -67,6 +69,7 @@ interface ChallengePieceListProps {
   editingState: EditingState;
   onEdit: (id: string) => void;
   onDelete: (id: string) => Promise<void> | void;
+  onToggleDisabled?: (id: string) => Promise<void> | void;
   onReorder: (orderedIds: string[]) => Promise<void> | void;
   sortMode: PieceSortMode;
   onSortChange: (mode: PieceSortMode) => void;
@@ -152,7 +155,7 @@ function ActionBtn({
 }
 
 export function ChallengePieceList({
-  project, pieces, editingState, onEdit, onDelete, onReorder,
+  project, pieces, editingState, onEdit, onDelete, onToggleDisabled, onReorder,
   sortMode, onSortChange, viewMode, onViewChange,
 }: ChallengePieceListProps) {
   const { t } = useTranslation();
@@ -353,15 +356,21 @@ export function ChallengePieceList({
           </div>
 
           {/* Sort dropdown */}
-          <select
+          <Select
             value={sortMode}
-            onChange={(e) => { onSortChange(e.target.value as PieceSortMode); setPage(1); }}
-            className="h-8 rounded-xl border border-white/[0.08] bg-white/[0.03] px-2.5 text-[0.72rem] font-bold text-foreground focus:outline-none focus:ring-1 focus:ring-[hsl(var(--challenge-blue))]/40"
+            onValueChange={(value) => { onSortChange(value as PieceSortMode); setPage(1); }}
           >
-            {SORT_OPTIONS.map(([value, labelKey]) => (
-              <option key={value} value={value}>{t(labelKey)}</option>
-            ))}
-          </select>
+            <SelectTrigger className="h-8 w-[11rem] rounded-xl border-white/[0.08] bg-white/[0.03] px-2.5 text-[0.72rem] font-bold focus:ring-[hsl(var(--challenge-blue))]/40 dark:bg-slate-950/80 dark:text-slate-100 dark:ring-offset-slate-950">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent className="border-white/[0.10] bg-slate-950 text-slate-100 dark:border-white/[0.10] dark:bg-slate-950 dark:text-slate-100">
+              {SORT_OPTIONS.map(([value, labelKey]) => (
+                <SelectItem key={value} value={value} className="text-[0.72rem] font-bold focus:bg-white/10 focus:text-slate-100">
+                  {t(labelKey)}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
 
           {/* View toggle */}
           <div className="flex items-center gap-0.5 rounded-full border border-white/[0.08] bg-black/[0.20] p-1">
@@ -430,7 +439,7 @@ export function ChallengePieceList({
             <article
               key={piece.id}
               {...dragProps(piece.id)}
-              className={`group flex h-full min-h-[360px] flex-col overflow-hidden rounded-[18px] border transition-all ${editingClass(piece.id)} ${dragRing(piece.id)}`}
+              className={`group flex h-full min-h-[360px] flex-col overflow-hidden rounded-[18px] border transition-all ${editingClass(piece.id)} ${dragRing(piece.id)} ${piece.disabled ? 'opacity-50' : ''}`}
             >
               {/* Image */}
               <div className="relative h-40 w-full shrink-0 overflow-hidden border-b border-white/[0.05] bg-white/[0.03]">
@@ -458,14 +467,13 @@ export function ChallengePieceList({
 
               {/* Content */}
               <div className="flex flex-1 flex-col gap-2.5 p-3">
-                {/* Name + label + date */}
+                {/* Name + label */}
                 <div>
                   <p className="truncate text-sm font-extrabold leading-tight text-foreground">{piece.name}</p>
                   <div className="mt-1.5 flex flex-wrap items-center gap-1.5">
                     <span className="rounded-[10px] bg-[hsl(var(--challenge-pink))]/15 px-2 py-0.5 text-[0.65rem] font-extrabold text-[hsl(var(--challenge-pink))]">
                       {piece.label}
                     </span>
-                    <span className="text-[0.65rem] text-muted-foreground">{formatDisplayDate(piece.printedAt)}</span>
                   </div>
                 </div>
 
@@ -496,24 +504,8 @@ export function ChallengePieceList({
                   🗂️ {t('tracker.plateCount.display', { count: piece.plate_count ?? 1 })}
                 </p>
 
-                {/* Actions */}
+                {/* Actions — sin subir/bajar en grid */}
                 <div className="mt-auto flex flex-wrap gap-1.5 pt-1">
-                  <ActionBtn
-                    icon={<ArrowUp className="h-3 w-3" />}
-                    label={t('pieces_move_up')}
-                    shortLabel={t('pieces_move_up')}
-                    onClick={() => movePiece(piece.id, 'up')}
-                    disabled={sorted[0]?.id === piece.id}
-                    actionMode={actionMode}
-                  />
-                  <ActionBtn
-                    icon={<ArrowDown className="h-3 w-3" />}
-                    label={t('pieces_move_down')}
-                    shortLabel={t('pieces_move_down')}
-                    onClick={() => movePiece(piece.id, 'down')}
-                    disabled={sorted[sorted.length - 1]?.id === piece.id}
-                    actionMode={actionMode}
-                  />
                   <ActionBtn
                     icon={<Pencil className="h-3 w-3" />}
                     label={t('pieces_edit')}
@@ -521,6 +513,15 @@ export function ChallengePieceList({
                     onClick={() => onEdit(piece.id)}
                     actionMode={actionMode}
                   />
+                  {onToggleDisabled && (
+                    <ActionBtn
+                      icon={piece.disabled ? <Eye className="h-3 w-3" /> : <EyeOff className="h-3 w-3" />}
+                      label={piece.disabled ? 'Activar pieza' : 'Desactivar pieza'}
+                      shortLabel={piece.disabled ? 'Activar' : 'Desactivar'}
+                      onClick={() => onToggleDisabled(piece.id)}
+                      actionMode={actionMode}
+                    />
+                  )}
                   <ActionBtn
                     icon={<Trash2 className="h-3 w-3" />}
                     label={t('pieces_delete')}
@@ -542,7 +543,7 @@ export function ChallengePieceList({
             <article
               key={piece.id}
               {...dragProps(piece.id)}
-              className={`rounded-[16px] border p-3 transition-all ${editingClass(piece.id)} ${dragRing(piece.id)}`}
+              className={`rounded-[16px] border p-3 transition-all ${editingClass(piece.id)} ${dragRing(piece.id)} ${piece.disabled ? 'opacity-50' : ''}`}
             >
               {/* Row: thumb + info */}
               <div className="flex items-center gap-3">
@@ -616,6 +617,18 @@ export function ChallengePieceList({
                 >
                   {t('pieces_edit')}
                 </Button>
+                {onToggleDisabled && (
+                  <Button
+                    size="sm" variant="outline"
+                    className="h-7 rounded-full px-2.5 text-xs font-bold"
+                    onClick={() => onToggleDisabled(piece.id)}
+                  >
+                    {piece.disabled
+                      ? <><Eye className="mr-1 h-3 w-3" />Activar</>
+                      : <><EyeOff className="mr-1 h-3 w-3" />Desactivar</>
+                    }
+                  </Button>
+                )}
                 <Button
                   size="sm" variant="outline"
                   className="h-7 rounded-full border-destructive/30 bg-destructive/10 px-2.5 text-xs font-bold text-destructive hover:bg-destructive/20 hover:text-destructive"
@@ -630,42 +643,13 @@ export function ChallengePieceList({
       )}
 
       {/* ── Pagination ───────────────────────────────────────────────────── */}
-      {totalPages > 1 && (
-        <div className="flex items-center justify-between gap-3 rounded-[16px] border border-white/[0.08] bg-white/[0.02] px-4 py-2.5">
-          <span className="text-[0.72rem] font-bold text-muted-foreground">
-            {t('pieces_pagination_label') ?? 'Página'} {safePage} {t('pieces_pagination_of_suffix') ?? 'de'} {totalPages} · {filtered.length} {t('pieces_count_suffix') ?? 'piezas'}
-          </span>
-          <div className="flex items-center gap-1">
-            <Button
-              type="button" variant="outline" size="icon"
-              className="h-7 w-7 rounded-full"
-              onClick={() => setPage((p) => Math.max(1, p - 1))}
-              disabled={safePage === 1}
-            >
-              <ChevronLeft className="h-3.5 w-3.5" />
-            </Button>
-            {Array.from({ length: totalPages }, (_, i) => i + 1).map((n) => (
-              <Button
-                key={n} type="button"
-                variant={n === safePage ? 'default' : 'outline'}
-                size="icon"
-                className="h-7 w-7 rounded-full text-[0.7rem] font-bold"
-                onClick={() => setPage(n)}
-              >
-                {n}
-              </Button>
-            ))}
-            <Button
-              type="button" variant="outline" size="icon"
-              className="h-7 w-7 rounded-full"
-              onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
-              disabled={safePage === totalPages}
-            >
-              <ChevronRight className="h-3.5 w-3.5" />
-            </Button>
-          </div>
-        </div>
-      )}
+      <PaginationBar
+        page={safePage}
+        totalPages={totalPages}
+        totalItems={filtered.length}
+        itemLabel={t('pieces_count_suffix') ?? 'piezas'}
+        onChange={setPage}
+      />
 
       {/* ── Delete dialog ──────────────────────────────────────────────────── */}
       <Dialog open={!!deleteTarget} onOpenChange={(open) => !open && setDeleteTarget(null)}>
@@ -673,14 +657,23 @@ export function ChallengePieceList({
           <DialogHeader>
             <DialogTitle>{t('pieces_delete_title')}</DialogTitle>
             <DialogDescription>
-              {t('pieces_delete_confirm', { label: deleteTarget?.label ?? '', name: deleteTarget?.name ?? '' })}
+              {t('pieces_delete_confirm', { name: deleteTarget?.name ?? '' })}
             </DialogDescription>
           </DialogHeader>
           <DialogFooter>
             <DialogClose asChild>
               <Button variant="outline" className="rounded-full">{t('cancel')}</Button>
             </DialogClose>
-            <Button variant="destructive" className="rounded-full" onClick={handleDeleteConfirm}>
+            <Button
+              variant="destructive"
+              className="rounded-full"
+              onClick={() => {
+                if (deleteTarget) {
+                  onDelete(deleteTarget.id);
+                  setDeleteTarget(null);
+                }
+              }}
+            >
               {t('delete')}
             </Button>
           </DialogFooter>

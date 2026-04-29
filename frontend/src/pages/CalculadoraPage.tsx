@@ -2,12 +2,12 @@ import React from 'react';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { Calculator as CalculatorIcon, FolderOpen } from 'lucide-react';
-import { motion } from 'framer-motion';
 import { useTranslation } from 'react-i18next';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
 import { CalculatorForm } from '@/components/calculator-form';
 import { PriceStickyDesktop, PriceStickyMobile } from '@/components/price-sticky-panel';
+import { PageShell, PageHeader } from '@/components/page-shell';
 import { formSchema, type FormData } from '@/lib/schema';
 import { defaultFormValues } from '@/lib/defaults';
 import { buildProjectPdfData } from '@/features/calculator/lib/build-project-pdf-data';
@@ -71,37 +71,23 @@ export function CalculadoraPage() {
   }
 
   return (
-    <motion.div
-      initial={{ opacity: 0, y: 8 }}
-      animate={{ opacity: 1, y: 0 }}
-      transition={{ duration: 0.35 }}
-      className="w-full"
-    >
-      {/* ── Page header ── */}
-      <div className="mb-8 rounded-2xl border border-border/70 bg-card/60 p-5 backdrop-blur-md shadow-[0_12px_36px_rgba(2,8,23,0.08)] dark:border-white/10 sm:p-7">
-        <div className="flex flex-wrap items-start justify-between gap-4">
-          <div>
-            <div className="mb-2 inline-flex items-center gap-2 rounded-full border border-border/60 bg-background/70 px-3 py-1.5 text-xs font-bold text-[hsl(var(--challenge-blue))] dark:border-white/[0.08] dark:bg-white/[0.04]">
-              <CalculatorIcon className="h-3.5 w-3.5" />
-              {t('calc_hero_badge')}
-            </div>
-            <h2 className="challenge-gradient-text text-3xl font-black leading-none sm:text-4xl">
-              {t('calc_hero_title')}
-            </h2>
-            <p className="mt-2 text-sm text-muted-foreground">
-              {t('calc_hero_subtitle')}
-            </p>
-          </div>
+    <PageShell>
+      <PageHeader
+        icon={<CalculatorIcon />}
+        badge={t('calc_hero_badge')}
+        title={t('calc_hero_title')}
+        subtitle={t('calc_hero_subtitle')}
+        actions={
           <Button
             variant="outline"
-            className="shrink-0 rounded-lg font-medium"
+            className="rounded-full font-bold"
             onClick={() => navigate('/proyectos')}
           >
             <FolderOpen className="mr-2 h-4 w-4" />
             {t('load_project') ?? 'Cargar proyecto'}
           </Button>
-        </div>
-      </div>
+        }
+      />
 
       {/* ── Main content: form (65%) + sticky summary (35%) ── */}
       <div className="xl:grid xl:grid-cols-[minmax(0,1fr)_360px] xl:items-start xl:gap-6 pb-24 xl:pb-0">
@@ -124,6 +110,6 @@ export function CalculadoraPage() {
 
       {/* Mobile fixed bottom bar */}
       <PriceStickyMobile calculations={calculations} />
-    </motion.div>
+    </PageShell>
   );
 }

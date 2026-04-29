@@ -226,12 +226,10 @@ export function BarcodeScannerModal({ open, onClose, onFill }: BarcodeScannerMod
     bambu: t('scan_source_bambu'),
     opendb: t('scan_source_opendb'),
     manual: t('scan_source_manual'),
-    spoolman: t('scan_source_spoolman'),
+    spoolman: '',
   };
 
-  const helperMessage = result?.source === 'spoolman'
-    ? t('inventory.scanner.spoolmanDetected')
-    : !result?.found && result?.source === 'manual'
+  const helperMessage = !result?.found && result?.source === 'manual'
     ? t('inventory.scanner.notLinked')
     : null;
 
@@ -307,9 +305,7 @@ export function BarcodeScannerModal({ open, onClose, onFill }: BarcodeScannerMod
               ) : (
                 <Info className="h-4 w-4 text-muted-foreground shrink-0" />
               )}
-              <Badge variant={sourceBadgeVariant(result.source)}>
-                {sourceLabel[result.source]}
-              </Badge>
+              {sourceLabel[result.source] && <Badge variant={sourceBadgeVariant(result.source)}>{sourceLabel[result.source]}</Badge>}
             </div>
 
             {/* Data card */}

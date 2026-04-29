@@ -21,7 +21,7 @@ type ToastFn = (input: ToastInput) => void;
 interface UseCalculatorActionsInput {
   form: UseFormReturn<FormData>;
   user: LocalUser | null;
-  loginWithGoogle: () => void;
+  goToLogin: () => void;
   isGuest?: boolean;
   onGuestSaveAttempt?: () => void;
   saveGuestProjectDraft?: (project: unknown) => void;
@@ -44,7 +44,7 @@ interface AnalysisFeedback {
 export function useCalculatorActions({
   form,
   user,
-  loginWithGoogle,
+  goToLogin,
   isGuest = false,
   onGuestSaveAttempt,
   saveGuestProjectDraft,
@@ -97,7 +97,7 @@ export function useCalculatorActions({
         onProjectSaved?.();
         onGuestSaveAttempt?.();
       } else {
-        loginWithGoogle();
+        goToLogin();
       }
       return;
     }

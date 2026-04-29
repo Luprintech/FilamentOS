@@ -41,6 +41,7 @@ export interface StatsTimePoint {
 export interface StatsProjectRow {
   projectId: string;
   title: string;
+  source: string;
   pieces: number;
   grams: number;
   cost: number;
@@ -76,6 +77,7 @@ export interface StatsPieceDetail {
   totalSecs: number;
   date: string;
   source: string;
+  imageUrl?: string | null;
 }
 
 export interface StatsPiecesResponse {

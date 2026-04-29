@@ -63,7 +63,6 @@ export function SpoolCard({ spool, onEdit, onDelete, onDeduct, onFinish, guestMo
   const percent = getRemainingPercent(spool);
   const lowStock = isLowStock(spool);
   const finished = spool.status === 'finished';
-  const sourceLabel = spool.inventorySource === 'spoolman' ? t('inventory.source.spoolman') : t('inventory.source.local');
 
   const guestTooltip = 'Inicia sesión para gestionar tu inventario';
 
@@ -110,9 +109,6 @@ export function SpoolCard({ spool, onEdit, onDelete, onDeduct, onFinish, guestMo
             {spool.material} · {spool.color}
           </p>
           <div className="mt-1 flex flex-wrap gap-1">
-            <span className="rounded-full border border-border/60 bg-background/70 px-2 py-0.5 text-[10px] font-semibold text-foreground">
-              {sourceLabel}
-            </span>
             {finished && (
               <span className="rounded-full border border-border/60 bg-muted px-2 py-0.5 text-[10px] font-semibold text-muted-foreground">
                 {t('inventory.finished')}

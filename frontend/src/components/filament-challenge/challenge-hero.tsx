@@ -1,6 +1,6 @@
 import React from 'react';
 import { cn } from '@/lib/utils';
-import { computeProjectStats, secsToString, formatCost } from './filament-storage';
+import { computeProjectStats, secsToLongString, formatCost } from './filament-storage';
 import type { FilamentPiece, FilamentProject } from './filament-types';
 import { useTranslation } from 'react-i18next';
 
@@ -68,8 +68,8 @@ export function ChallengeHero({ project, pieces, onBack, onPrint, onEditProject,
         {t('hero_badge')}
       </div>
 
-      <div className="mt-3 flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
-        <div className="flex flex-col gap-4 md:flex-row md:items-center lg:flex-1">
+      <div className="mt-3 flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
+        <div className="flex min-w-0 flex-col gap-4 md:flex-row md:items-center sm:flex-1">
           {project.coverImage && (
             <div className="overflow-hidden rounded-[20px] border border-white/[0.10] bg-black/20 md:w-56">
               <img
@@ -95,7 +95,7 @@ export function ChallengeHero({ project, pieces, onBack, onPrint, onEditProject,
           <button
             type="button"
             onClick={onAddPiece}
-            className="challenge-btn-primary shrink-0 rounded-full px-5 py-3 text-sm font-extrabold sm:px-6"
+            className="challenge-btn-primary shrink-0 self-start rounded-full px-5 py-3 text-sm font-extrabold sm:ml-auto sm:px-6"
           >
             {t('hero_add_piece')} +
           </button>
@@ -110,7 +110,7 @@ export function ChallengeHero({ project, pieces, onBack, onPrint, onEditProject,
         />
         <StatCard
           label={t('hero_time')}
-          value={secsToString(stats.totalSecs)}
+          value={secsToLongString(stats.totalSecs)}
           color="blue"
         />
         <StatCard

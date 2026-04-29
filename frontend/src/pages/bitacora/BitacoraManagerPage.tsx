@@ -1,18 +1,12 @@
 import { useOutletContext, useNavigate } from 'react-router-dom';
-import { useState } from 'react';
-import {
-  Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription,
-} from '@/components/ui/dialog';
-import { ProjectForm, ProjectManager } from '@/components/filament-challenge/project-manager';
+import { ProjectManager } from '@/components/filament-challenge/project-manager';
 import { TrackerPrintSummary } from '@/components/filament-challenge/tracker-print-summary';
 import { apiGetPieces } from '@/components/filament-challenge/tracker-api';
 import { mockTrackerPieces } from '@/data/mockData';
 import { buildTrackerPdfData } from '@/features/tracker/lib/build-tracker-pdf-data';
 import type { BitacoraContext } from './BitacoraLayout';
-import { useTranslation } from 'react-i18next';
 
 export function BitacoraManagerPage() {
-  const { t } = useTranslation();
   const navigate = useNavigate();
   const {
     projects, activeProject, selectProject,
@@ -20,12 +14,9 @@ export function BitacoraManagerPage() {
     pieces, isGuest,
   } = useOutletContext<BitacoraContext>();
 
-  const [createOpen, setCreateOpen] = useState(false);
-
   async function handleCreate(input: Parameters<typeof createProject>[0]) {
     if (isGuest) return;
     const id = await createProject(input);
-    setCreateOpen(false);
     navigate(`/bitacora/${id}`);
   }
 
@@ -57,7 +48,7 @@ export function BitacoraManagerPage() {
         <ProjectManager
           projects={projects}
           activeProjectId={activeProject?.id ?? null}
-          onCreate={() => isGuest ? undefined : setCreateOpen(true)}
+          onCreate={handleCreate}
           onUpdate={updateProject}
           onDelete={deleteProject}
           onSelect={selectProject}
@@ -73,21 +64,6 @@ export function BitacoraManagerPage() {
           <TrackerPrintSummary project={activeProject} pieces={pieces} />
         </div>
       )}
-
-      {/* Create project modal */}
-      <Dialog open={createOpen} onOpenChange={setCreateOpen}>
-        <DialogContent className="w-full sm:max-w-lg">
-          <DialogHeader>
-            <DialogTitle>{t('pm_dialog_title')}</DialogTitle>
-            <DialogDescription>{t('pm_dialog_subtitle')}</DialogDescription>
-          </DialogHeader>
-          <ProjectForm
-            onSubmit={handleCreate}
-            onCancel={() => setCreateOpen(false)}
-            submitLabel={t('pm_create_btn')}
-          />
-        </DialogContent>
-      </Dialog>
     </>
   );
 }

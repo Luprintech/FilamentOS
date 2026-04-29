@@ -9,7 +9,7 @@ interface GuestBannerProps {
 
 /** Banner no-sticky para secciones de ejemplo en modo invitado. */
 export function GuestBanner({ message }: GuestBannerProps) {
-  const { loginWithGoogle } = useAuth();
+  const { goToLogin } = useAuth();
 
   return (
     <div
@@ -25,7 +25,7 @@ export function GuestBanner({ message }: GuestBannerProps) {
         size="sm"
         variant="outline"
         className="h-7 shrink-0 rounded-full border-purple-300 bg-white px-3 text-xs font-bold text-purple-700 hover:bg-purple-100 dark:border-purple-700 dark:bg-transparent dark:text-purple-300 dark:hover:bg-purple-900/40"
-        onClick={loginWithGoogle}
+        onClick={goToLogin}
       >
         Iniciar sesión
       </Button>

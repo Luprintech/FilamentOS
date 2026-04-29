@@ -280,19 +280,19 @@ const de = {
   tracker_login_to_add: 'Anmelden, um Teile hinzuzufügen',
   tracker_login_to_manage: 'Melden Sie sich an, um Teile in Ihren Projekten zu erstellen und zu verwalten.',
   hero_back: '← Alle Projekte',
-  hero_badge: '✨ 3D-Druck-Tracker',
+  hero_badge: '3D-Druck-Tracker',
   hero_pieces: 'Teile',
   hero_time: 'Gesamtzeit',
   hero_filament: 'Filament',
   hero_cost: 'Gesamtkosten',
   hero_progress: 'Fortschritt',
   hero_pdf: 'PDF anpassen',
-  hero_edit: '✏️ Projekt bearbeiten',
-  hero_delete: '🗑️ Projekt löschen',
+  hero_edit: 'Projekt bearbeiten',
+  hero_delete: 'Projekt löschen',
   hero_goal_reached: '🎉 Ziel erreicht! Sie haben alle {{goal}} Teile von "{{title}}" fertiggestellt.',
   form_title: 'Teil registrieren',
   form_subtitle: 'Fügen Sie das Label, den Namen, die Gesamtdruckzeit und die Gesamtgramm des Teils hinzu.',
-  form_editing_badge: '✏️ Gespeichertes Teil bearbeiten',
+  form_editing_badge: '✏ Gespeichertes Teil bearbeiten',
   form_label: 'Bezeichnung',
   form_label_placeholder: 'z.B. Tag 1, Teil 5, Version A...',
   form_name: 'Teilname',
@@ -541,6 +541,28 @@ const de = {
 
   // calculator-stats
   'calc.printedAt.label': 'Druckdatum',
+  // Filtro de origen
+  'stats_filter_source': 'Quelle',
+  'stats_filter_source_tracker': 'Drucktagebuch',
+  'stats_filter_source_calculator': 'Rechner',
+
+  // stats pieces table + view toggle
+  'stats_pieces_search': 'Teil oder Projekt suchen...',
+  'stats_pieces_results': '{{count}} Ergebnisse von {{total}}',
+  'stats_pieces_showing': '{{count}} Teile angezeigt',
+  'stats_pieces_page': 'Seite',
+  'stats_pieces_prev': 'Zurück',
+  'stats_pieces_next': 'Weiter',
+  'stats_pieces_table_name': 'Teil',
+  'stats_pieces_table_status': 'Status',
+  'stats_pieces_table_filament': 'Filament',
+  'stats_pieces_table_cost': 'Kosten',
+  'stats_pieces_table_time': 'Zeit',
+  'stats_pieces_table_efficiency': '€/h',
+  'stats_pieces_table_date': 'Datum',
+  'stats_view_overview': 'Übersicht',
+  'stats_view_detail': 'Detailansicht',
+
 };
 
 export default de;

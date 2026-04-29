@@ -340,7 +340,7 @@ export function CalculatorForm({ form, onProjectSaved, onCalculationsChange }: {
 }) {
   const navigate = useNavigate();
   const { toast } = useToast();
-  const { user, loginWithGoogle, loading: authLoading, isGuest, saveGuestProjectDraft } = useAuth();
+  const { user, goToLogin, loading: authLoading, isGuest, saveGuestProjectDraft } = useAuth();
   const { t } = useTranslation();
   const { currency } = useCurrency();
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -458,7 +458,7 @@ export function CalculatorForm({ form, onProjectSaved, onCalculationsChange }: {
   } = useCalculatorActions({
     form,
     user,
-    loginWithGoogle,
+    goToLogin,
     isGuest,
     saveGuestProjectDraft,
     onGuestSaveAttempt: () => setGuestSaveModalOpen(true),

@@ -210,11 +210,11 @@ export const mockStatsResponse: StatsResponse = {
     { period: '2026-04', pieces: 10, grams: 370, cost: 16.89, secs: 25.68 * 3600 },
   ],
   byProject: [
-    { projectId: 'guest-sample-4', title: 'Cubos Anti-Estrés', pieces: 12, grams: 1200, cost: 27.18, secs: 57600 },
-    { projectId: 'guest-sample-5', title: 'Organizadores Escritorio', pieces: 12, grams: 740, cost: 16.39, secs: 28800 },
-    { projectId: 'guest-sample-3', title: 'Miniaturas D&D', pieces: 12, grams: 340, cost: 7.25, secs: 43200 },
-    { projectId: 'guest-sample-r', title: 'Repuestos Impresora', pieces: 12, grams: 270, cost: 5.60, secs: 18000 },
-    { projectId: 'guest-sample-2', title: 'Llaveros PLA', pieces: 12, grams: 60, cost: 2.49, secs: 14400 },
+    { projectId: 'guest-sample-4', title: 'Cubos Anti-Estrés', source: 'tracker', pieces: 12, grams: 1200, cost: 27.18, secs: 57600 },
+    { projectId: 'guest-sample-5', title: 'Organizadores Escritorio', source: 'tracker', pieces: 12, grams: 740, cost: 16.39, secs: 28800 },
+    { projectId: 'guest-sample-3', title: 'Miniaturas D&D', source: 'tracker', pieces: 12, grams: 340, cost: 7.25, secs: 43200 },
+    { projectId: 'guest-sample-r', title: 'Repuestos Impresora', source: 'tracker', pieces: 12, grams: 270, cost: 5.60, secs: 18000 },
+    { projectId: 'guest-sample-2', title: 'Llaveros PLA', source: 'tracker', pieces: 12, grams: 60, cost: 2.49, secs: 14400 },
   ],
 };
 

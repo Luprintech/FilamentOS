@@ -280,19 +280,19 @@ const it = {
   tracker_login_to_add: 'Accedi per aggiungere pezzi',
   tracker_login_to_manage: 'Accedi per creare e gestire pezzi nei tuoi progetti.',
   hero_back: '← Tutti i progetti',
-  hero_badge: '✨ Tracker di stampa 3D',
+  hero_badge: 'Tracker di stampa 3D',
   hero_pieces: 'Pezzi',
   hero_time: 'Tempo totale',
   hero_filament: 'Filamento',
   hero_cost: 'Costo totale',
   hero_progress: 'Progresso',
   hero_pdf: 'Personalizza PDF',
-  hero_edit: '✏️ Modifica progetto',
-  hero_delete: '🗑️ Elimina progetto',
+  hero_edit: 'Modifica progetto',
+  hero_delete: 'Elimina progetto',
   hero_goal_reached: '🎉 Obiettivo raggiunto! Hai completato tutte le {{goal}} pezzi di "{{title}}".',
   form_title: 'Registra pezzo',
   form_subtitle: 'Aggiungi etichetta, nome, tempo totale di stampa e grammi totali del pezzo.',
-  form_editing_badge: '✏️ Modifica di un pezzo salvato',
+  form_editing_badge: '✏ Modifica di un pezzo salvato',
   form_label: 'Etichetta',
   form_label_placeholder: 'es: Giorno 1, Pezzo 5, Versione A...',
   form_name: 'Nome del pezzo',
@@ -541,6 +541,30 @@ const it = {
 
   // calculator-stats
   'calc.printedAt.label': 'Data di stampa',
+  // Vista tabella pezzi
+  'stats_view_overview': 'Panoramica',
+  'stats_view_detail': 'Dettaglio pezzi',
+  'stats_pieces_search': 'Cerca pezzo o progetto...',
+  'stats_pieces_results': '{{count}} risultati su {{total}}',
+  'stats_pieces_showing': 'Mostrando {{count}} pezzi',
+  'stats_pieces_page': 'Pagina',
+  'stats_pieces_prev': 'Precedente',
+  'stats_pieces_next': 'Successivo',
+  'stats_pieces_table_name': 'Pezzo',
+  'stats_pieces_table_status': 'Stato',
+  'stats_pieces_table_filament': 'Filamento',
+  'stats_pieces_table_cost': 'Costo',
+  'stats_pieces_table_time': 'Tempo',
+  'stats_pieces_table_efficiency': '€/h',
+  'stats_pieces_table_date': 'Data',
+  'stats_kpi_efficiency': 'Efficienza media',
+  'stats_kpi_efficiency_sub': 'costo per ora di stampa',
+
+  // Filtro de origen
+  'stats_filter_source': 'Origine',
+  'stats_filter_source_tracker': 'Diario di stampa',
+  'stats_filter_source_calculator': 'Calcolatore',
+
 };
 
 export default it;

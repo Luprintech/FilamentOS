@@ -1,9 +1,11 @@
 import React, { useMemo, useState } from 'react';
 import { useForm } from 'react-hook-form';
-import { Search, Target, BarChart3, Clock, Weight, Wallet, FolderOpen, LayoutGrid, List, ChevronLeft, ChevronRight, FileText, Pencil, Trash2 } from 'lucide-react';
+import { Search, Target, BarChart3, Clock, Weight, Wallet, LayoutGrid, List, FileText, Trash2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
+import { PaginationBar } from '@/components/ui/pagination-bar';
 import { Input } from '@/components/ui/input';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Label } from '@/components/ui/label';
 import {
   Dialog, DialogContent, DialogHeader, DialogTitle,
@@ -15,7 +17,7 @@ import type { ProjectInput } from './use-filament-storage';
 import { useTranslation } from 'react-i18next';
 import { useCurrency } from '@/context/currency-context';
 import { ImageUpload } from '@/components/ui/image-upload';
-import { GridDensityControl, GRID_DENSITY_OPTIONS, getGridActionMode, getGridColumnsVars, type GridActionMode, type GridDensity } from '@/components/grid-density-control';
+import { GridDensityControl, GRID_DENSITY_OPTIONS, getGridActionMode, getResponsiveGridStyle, useGridPageSize, type GridActionMode, type GridDensity } from '@/components/grid-density-control';
 import { compressImage } from '@/lib/utils';
 import { cn } from '@/lib/utils';
 
@@ -23,7 +25,6 @@ import { cn } from '@/lib/utils';
 type ProjectSortMode = 'created-desc' | 'created-asc' | 'name-asc' | 'name-desc' | 'pieces-desc' | 'cost-desc' | 'cost-asc';
 type ProjectViewMode = 'grid' | 'list';
 
-const PAGE_SIZE = 9;
 const GRID_DENSITY_STORAGE_KEY = 'filamentos_tracker_project_grid_density';
 
 const SORT_OPTIONS: [ProjectSortMode, string][] = [
@@ -294,6 +295,7 @@ export function ProjectManager({
 }: ProjectManagerProps) {
   const { t } = useTranslation();
   const iconClass = 'h-4 w-4';
+  const gridRef = React.useRef<HTMLDivElement>(null);
   const [createOpen, setCreateOpen]     = useState(false);
   const [editing, setEditing]           = useState<FilamentProject | null>(null);
   const [deleteTarget, setDeleteTarget] = useState<FilamentProject | null>(null);
@@ -302,6 +304,7 @@ export function ProjectManager({
   const [viewMode, setViewMode]         = useState<ProjectViewMode>('grid');
   const [gridDensity, setGridDensity]   = useState<GridDensity>(loadGridDensity);
   const [page, setPage]                 = useState(1);
+  const pageSize                        = useGridPageSize(gridRef, gridDensity, viewMode, 9);
 
   React.useEffect(() => {
     saveGridDensity(gridDensity);
@@ -315,12 +318,12 @@ export function ProjectManager({
     return sortProjects(filtered, sortMode);
   }, [projects, query, sortMode]);
 
-  const totalPages = Math.max(1, Math.ceil(filteredProjects.length / PAGE_SIZE));
+  const totalPages = Math.max(1, Math.ceil(filteredProjects.length / pageSize));
   const safePage   = Math.min(page, totalPages);
   const paginated  = useMemo(() => {
-    const start = (safePage - 1) * PAGE_SIZE;
-    return filteredProjects.slice(start, start + PAGE_SIZE);
-  }, [filteredProjects, safePage]);
+    const start = (safePage - 1) * pageSize;
+    return filteredProjects.slice(start, start + pageSize);
+  }, [filteredProjects, safePage, pageSize]);
 
   function handleCreate(input: ProjectInput) {
     onCreate(input);
@@ -342,7 +345,7 @@ export function ProjectManager({
   const actionMode = viewMode === 'grid' ? getGridActionMode(gridDensity) : 'large';
 
   return (
-    <div className="w-full animate-fade-in space-y-5">
+    <div ref={gridRef} className="w-full animate-fade-in space-y-5">
 
 
       {/* ── Page header ── */}
@@ -391,15 +394,21 @@ export function ProjectManager({
           </div>
 
           {/* Sort */}
-          <select
+          <Select
             value={sortMode}
-            onChange={(e) => { setSortMode(e.target.value as ProjectSortMode); setPage(1); }}
-            className="h-9 rounded-xl border border-white/[0.10] bg-card/60 px-3 text-xs font-bold text-foreground backdrop-blur-md focus:outline-none focus:ring-1 focus:ring-primary"
+            onValueChange={(value) => { setSortMode(value as ProjectSortMode); setPage(1); }}
           >
-            {SORT_OPTIONS.map(([value, key]) => (
-              <option key={value} value={value}>{t(key)}</option>
-            ))}
-          </select>
+            <SelectTrigger className="h-9 w-[11.5rem] rounded-xl border-white/[0.10] bg-card/60 px-3 text-xs font-bold backdrop-blur-md dark:bg-slate-950/80 dark:text-slate-100 dark:ring-offset-slate-950">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent className="border-white/[0.10] bg-slate-950 text-slate-100 dark:border-white/[0.10] dark:bg-slate-950 dark:text-slate-100">
+              {SORT_OPTIONS.map(([value, key]) => (
+                <SelectItem key={value} value={value} className="text-xs font-bold focus:bg-white/10 focus:text-slate-100">
+                  {t(key)}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
 
           {/* View toggle */}
           <div className="flex rounded-xl border border-white/[0.10] bg-card/60 p-0.5">
@@ -441,10 +450,10 @@ export function ProjectManager({
         <>
         <div
           className={viewMode === 'grid'
-            ? 'grid grid-cols-1 gap-5 transition-all duration-300 sm:grid-cols-2 xl:[grid-template-columns:repeat(auto-fill,minmax(var(--grid-min-width),1fr))]'
+            ? 'grid gap-5 transition-all duration-300'
             : 'flex flex-col gap-3'
           }
-          style={viewMode === 'grid' ? getGridColumnsVars(gridDensity) : undefined}
+          style={viewMode === 'grid' ? getResponsiveGridStyle(gridDensity) : undefined}
         >
           {paginated.map((project) => {
             const progressPct = project.goal > 0
@@ -459,15 +468,8 @@ export function ProjectManager({
             ];
 
             const actions = (
-              <div className="flex flex-wrap items-center gap-2">
-                  <ActionButton
-                    icon={<FolderOpen className="h-4 w-4" />}
-                    label="Abrir proyecto"
-                    shortLabel="Abrir"
-                    onClick={() => onOpenProject(project.id)}
-                    variant="default"
-                    actionMode={actionMode}
-                  />
+              // stopPropagation: evita que los botones propaguen el click del card
+              <div className="flex flex-wrap items-center gap-2" onClick={(e) => e.stopPropagation()}>
                   {onGeneratePdf && (
                     <ActionButton
                       icon={<FileText className="h-4 w-4" />}
@@ -497,7 +499,11 @@ export function ProjectManager({
 
             if (viewMode === 'list') {
               return (
-                <div key={project.id} className="challenge-panel flex items-center gap-4 rounded-[18px] border border-white/[0.10] bg-white/[0.03] p-4 transition-shadow hover:shadow-[0_4px_20px_rgba(0,0,0,0.15)]">
+                <div
+                  key={project.id}
+                  className="challenge-panel flex cursor-pointer items-center gap-4 rounded-[18px] border border-white/[0.10] bg-white/[0.03] p-4 transition-shadow hover:shadow-[0_4px_20px_rgba(0,0,0,0.15)]"
+                  onClick={() => onOpenProject(project.id)}
+                >
                   {/* Thumbnail */}
                   <div className="relative h-16 w-16 shrink-0 overflow-hidden rounded-[14px] bg-white/[0.05]">
                     {project.coverImage
@@ -534,7 +540,11 @@ export function ProjectManager({
 
             // Grid card
             return (
-              <div key={project.id} className="challenge-panel group flex h-full min-h-[390px] flex-col rounded-[24px] border border-white/[0.10] bg-white/[0.03] transition-shadow hover:shadow-[0_8px_32px_rgba(0,0,0,0.18)]">
+              <div
+                key={project.id}
+                className="challenge-panel group flex h-full min-h-[390px] cursor-pointer flex-col rounded-[24px] border border-white/[0.10] bg-white/[0.03] transition-shadow hover:shadow-[0_8px_32px_rgba(0,0,0,0.18)]"
+                onClick={() => onOpenProject(project.id)}
+              >
                 {/* Cover */}
                 <div className="relative h-40 overflow-hidden rounded-t-[22px] bg-white/[0.05]">
                   {project.coverImage
@@ -581,32 +591,13 @@ export function ProjectManager({
         </div>
 
         {/* ── Pagination ── */}
-        {totalPages > 1 && (
-          <div className="flex items-center justify-between gap-3 rounded-[18px] border border-white/[0.08] bg-white/[0.02] px-4 py-3">
-            <span className="text-xs font-bold text-muted-foreground">
-              {t('pm_page', { current: safePage, total: totalPages })}
-              {' · '}
-              {t('pm_total_projects', { count: filteredProjects.length }) ?? `${filteredProjects.length} proyectos`}
-            </span>
-            <div className="flex gap-1.5">
-              <Button variant="outline" size="icon" className="h-8 w-8 rounded-full"
-                onClick={() => setPage((p) => Math.max(1, p - 1))} disabled={safePage === 1}>
-                <ChevronLeft className="h-4 w-4" />
-              </Button>
-              {Array.from({ length: totalPages }, (_, i) => i + 1).map((n) => (
-                <Button key={n} variant={n === safePage ? 'default' : 'outline'} size="icon"
-                  className="h-8 w-8 rounded-full text-xs font-bold"
-                  onClick={() => setPage(n)}>
-                  {n}
-                </Button>
-              ))}
-              <Button variant="outline" size="icon" className="h-8 w-8 rounded-full"
-                onClick={() => setPage((p) => Math.min(totalPages, p + 1))} disabled={safePage === totalPages}>
-                <ChevronRight className="h-4 w-4" />
-              </Button>
-            </div>
-          </div>
-        )}
+        <PaginationBar
+          page={safePage}
+          totalPages={totalPages}
+          totalItems={filteredProjects.length}
+          itemLabel={t('pm_total_projects', { count: filteredProjects.length }) ?? 'proyectos'}
+          onChange={setPage}
+        />
         </>
       )}
 

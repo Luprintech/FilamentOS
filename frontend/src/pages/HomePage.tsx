@@ -45,7 +45,7 @@ function FeatureCard({ icon, title, description }: FeatureCardProps) {
 
 // ── Main landing page ─────────────────────────────────────────────────────────
 export function HomePage() {
-  const { loginWithGoogle, startGuest } = useAuth();
+  const { goToLogin, startGuest } = useAuth();
   const { resolvedTheme } = useTheme();
   const { t, i18n } = useTranslation();
   const navigate = useNavigate();
@@ -120,7 +120,7 @@ export function HomePage() {
               <ThemeToggle />
               <LanguageSelector />
               <CurrencySelector />
-              <Button variant="outline" size="sm" className="rounded-full font-bold" onClick={loginWithGoogle}>
+              <Button variant="outline" size="sm" className="rounded-full font-bold" onClick={goToLogin}>
                 {t('sign_in')}
               </Button>
             </div>
@@ -149,7 +149,7 @@ export function HomePage() {
                   className="w-full rounded-full font-bold"
                   onClick={() => {
                     setMobileMenuOpen(false);
-                    loginWithGoogle();
+                    goToLogin();
                   }}
                 >
                   {t('sign_in')}
@@ -201,7 +201,7 @@ export function HomePage() {
                 <Button
                   size="lg"
                   className="w-full rounded-full px-8 font-extrabold sm:w-auto"
-                  onClick={loginWithGoogle}
+                  onClick={goToLogin}
                 >
                   {t('sign_in')}
                   <ArrowRight className="ml-2 h-4 w-4" />
@@ -268,7 +268,7 @@ export function HomePage() {
                   <Button
                     size="lg"
                     className="w-full rounded-full px-8 font-extrabold sm:w-auto"
-                    onClick={loginWithGoogle}
+                    onClick={goToLogin}
                   >
                     {t('sign_in')} →
                   </Button>

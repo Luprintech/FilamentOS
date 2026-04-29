@@ -159,15 +159,15 @@ export function StatsFilterBar({ filters, onFiltersChange, projects }: StatsFilt
         </div>
 
         <div className="flex flex-col gap-1.5">
-          <Label className="text-xs text-muted-foreground">{t('stats_filter_source') ?? 'Origen'}</Label>
+          <Label className="text-xs text-muted-foreground">{t('stats_filter_source')}</Label>
           <Select value={filters.source} onValueChange={(val: any) => onFiltersChange({ ...filters, source: val })}>
-            <SelectTrigger className="h-8 text-sm w-32">
+            <SelectTrigger className="h-8 text-sm w-36">
               <SelectValue />
             </SelectTrigger>
             <SelectContent>
               <SelectItem value="all">{t('tracker.filter.all')}</SelectItem>
-              <SelectItem value="tracker">Bitácora</SelectItem>
-              <SelectItem value="calculator">Calculadora</SelectItem>
+              <SelectItem value="tracker">{t('stats_filter_source_tracker')}</SelectItem>
+              <SelectItem value="calculator">{t('stats_filter_source_calculator')}</SelectItem>
             </SelectContent>
           </Select>
         </div>

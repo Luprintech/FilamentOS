@@ -280,19 +280,19 @@ const pt = {
   tracker_login_to_add: 'Fazer login para adicionar peças',
   tracker_login_to_manage: 'Faça login para criar e gerenciar peças em seus projetos.',
   hero_back: '← Todos os projetos',
-  hero_badge: '✨ Rastreador de Impressão 3D',
+  hero_badge: 'Rastreador de Impressão 3D',
   hero_pieces: 'Peças',
   hero_time: 'Tempo total',
   hero_filament: 'Filamento',
   hero_cost: 'Custo total',
   hero_progress: 'Progresso',
   hero_pdf: 'Personalizar PDF',
-  hero_edit: '✏️ Editar projeto',
-  hero_delete: '🗑️ Excluir projeto',
+  hero_edit: 'Editar projeto',
+  hero_delete: 'Excluir projeto',
   hero_goal_reached: '🎉 Meta alcançada! Você completou as {{goal}} peças de "{{title}}".',
   form_title: 'Registrar peça',
   form_subtitle: 'Adicione a etiqueta, o nome, o tempo total de impressão e os gramas totais da peça.',
-  form_editing_badge: '✏️ Editando uma peça salva',
+  form_editing_badge: '✏ Editando uma peça salva',
   form_label: 'Etiqueta',
   form_label_placeholder: 'Ex: Dia 1, Peça 5, Versão A...',
   form_name: 'Nome da peça',
@@ -541,6 +541,30 @@ const pt = {
 
   // calculator-stats
   'calc.printedAt.label': 'Data de impressão',
+  // Vista de tabela de peças
+  'stats_view_overview': 'Visão geral',
+  'stats_view_detail': 'Detalhe das peças',
+  'stats_pieces_search': 'Pesquisar peça ou projeto...',
+  'stats_pieces_results': '{{count}} resultados de {{total}}',
+  'stats_pieces_showing': 'Mostrando {{count}} peças',
+  'stats_pieces_page': 'Página',
+  'stats_pieces_prev': 'Anterior',
+  'stats_pieces_next': 'Seguinte',
+  'stats_pieces_table_name': 'Peça',
+  'stats_pieces_table_status': 'Estado',
+  'stats_pieces_table_filament': 'Filamento',
+  'stats_pieces_table_cost': 'Custo',
+  'stats_pieces_table_time': 'Tempo',
+  'stats_pieces_table_efficiency': '€/h',
+  'stats_pieces_table_date': 'Data',
+  'stats_kpi_efficiency': 'Eficiência média',
+  'stats_kpi_efficiency_sub': 'custo por hora de impressão',
+
+  // Filtro de origen
+  'stats_filter_source': 'Origem',
+  'stats_filter_source_tracker': 'Di\u00e1rio',
+  'stats_filter_source_calculator': 'Calculadora',
+
 };
 
 export default pt;

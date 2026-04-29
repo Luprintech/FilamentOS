@@ -2,6 +2,7 @@ import React from 'react';
 import { cn } from '@/lib/utils';
 
 export const GRID_ROWS = 3;
+const GRID_GAP_PX = 20; // Tailwind gap-5
 
 export type GridDensity = 'compact' | 'medium' | 'large';
 export type GridActionMode = 'compact' | 'medium' | 'large';
@@ -34,6 +35,30 @@ export function getGridColumnsVars(density: GridDensity): React.CSSProperties {
   return {
     ['--grid-min-width' as string]: GRID_MIN_CARD_WIDTH[density],
   } as React.CSSProperties;
+}
+
+export function getResponsiveGridStyle(density: GridDensity): React.CSSProperties {
+  return {
+    gridTemplateColumns: `repeat(auto-fit, minmax(min(100%, ${GRID_MIN_CARD_WIDTH[density]}), 1fr))`,
+  };
+}
+
+export function calculateGridColumns(containerWidth: number, density: GridDensity): number {
+  const minWidthPx = parseInt(GRID_MIN_CARD_WIDTH[density], 10);
+
+  if (!Number.isFinite(containerWidth) || containerWidth <= 0) return 1;
+
+  return Math.max(1, Math.floor((containerWidth + GRID_GAP_PX) / (minWidthPx + GRID_GAP_PX)));
+}
+
+export function calculateGridPageSize(
+  containerWidth: number,
+  density: GridDensity,
+  viewMode: 'grid' | 'list',
+  listPageSize = 15,
+): number {
+  if (viewMode !== 'grid') return listPageSize;
+  return calculateGridColumns(containerWidth, density) * GRID_ROWS;
 }
 
 interface GridDensityControlProps {
@@ -124,45 +149,27 @@ export function GridDensityControl({ density, onChange, className }: GridDensity
 
 // Card height estimate (px) — all cards have min-height 360px + gap
 // Density affects WIDTH, not height
-const CARD_HEIGHT_ESTIMATE = 380; // 360px card + 20px gap
-
 export function useGridPageSize(
   containerRef: React.RefObject<HTMLElement>,
   density: GridDensity,
   viewMode: 'grid' | 'list',
   listPageSize = 15,
 ): number {
-  const minWidthPx = parseInt(GRID_MIN_CARD_WIDTH[density]);
-
   const calc = React.useCallback(
-    (containerWidth: number, containerHeight: number): number => {
-      if (viewMode !== 'grid') return listPageSize;
-      
-      // Calculate columns based on width
-      const cols = Math.max(1, Math.floor(containerWidth / minWidthPx));
-      
-      // Calculate rows based on available height
-      // Use at least 3 rows, but fill the page if there's more space
-      const minRows = 3;
-      const maxRowsFromHeight = Math.max(minRows, Math.floor(containerHeight / CARD_HEIGHT_ESTIMATE));
-      
-      return cols * maxRowsFromHeight;
-    },
-    [viewMode, minWidthPx, listPageSize],
+    (containerWidth: number): number => calculateGridPageSize(containerWidth, density, viewMode, listPageSize),
+    [density, viewMode, listPageSize],
   );
 
   const [pageSize, setPageSize] = React.useState<number>(() => {
-    if (typeof window === 'undefined') return GRID_ROWS * 3;
-    // Initial calculation using viewport height as estimate
-    const estimatedHeight = window.innerHeight - 300; // subtract header/nav/footer
-    return calc(window.innerWidth, estimatedHeight);
+    if (typeof window === 'undefined') return viewMode === 'grid' ? GRID_ROWS : listPageSize;
+    return calc(window.innerWidth);
   });
 
   React.useEffect(() => {
     const el = containerRef.current;
     if (!el) return;
     const observer = new ResizeObserver(([entry]) => {
-      setPageSize(calc(entry.contentRect.width, entry.contentRect.height));
+      setPageSize(calc(entry.contentRect.width));
     });
     observer.observe(el);
     return () => observer.disconnect();

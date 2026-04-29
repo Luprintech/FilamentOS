@@ -14,6 +14,7 @@
   "dependencies": {
     "@types/jszip": "^3.4.0",
     "adm-zip": "^0.5.16",
+    "bcryptjs": "^3.0.3",
     "better-sqlite3": "^12.6.2",
     "cors": "^2.8.5",
     "dotenv": "^16.5.0",

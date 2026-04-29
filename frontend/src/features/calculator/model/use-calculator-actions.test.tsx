@@ -62,7 +62,7 @@ function t(key: string, params?: Record<string, unknown>) {
 
 function createHook(user: { id: string; email: string | null; name: string | null; photo: string | null } | null = null) {
   const toast = vi.fn();
-  const loginWithGoogle = vi.fn();
+  const goToLogin = vi.fn();
   const queryClient = createTestQueryClient();
 
   const wrapper = ({ children }: { children: React.ReactNode }) => (
@@ -84,7 +84,7 @@ function createHook(user: { id: string; email: string | null; name: string | nul
         actions: useCalculatorActions({
           form,
           user,
-          loginWithGoogle,
+          goToLogin,
           toast,
           t: t as never,
           watchedValues,
@@ -106,7 +106,7 @@ function createHook(user: { id: string; email: string | null; name: string | nul
     { wrapper }
   );
 
-  return { ...hook, toast, loginWithGoogle };
+  return { ...hook, toast, goToLogin };
 }
 
 describe('useCalculatorActions', () => {
@@ -117,18 +117,18 @@ describe('useCalculatorActions', () => {
     mockGcodeMutate = vi.fn();
   });
 
-  it('si no hay usuario, en save dispara loginWithGoogle', async () => {
-    const { result, loginWithGoogle } = createHook(null);
+  it('si no hay usuario, en save dispara goToLogin', async () => {
+    const { result, goToLogin } = createHook(null);
 
     await act(async () => {
       await result.current.actions.handleSaveProject();
     });
 
-    expect(loginWithGoogle).toHaveBeenCalledTimes(1);
+    expect(goToLogin).toHaveBeenCalledTimes(1);
     expect(mockSaveProjectMutate).not.toHaveBeenCalled();
   });
 
-  it('guarda proyecto y resetea formulario cuando save es exitoso', async () => {
+  it('guarda proyecto nuevo, conserva el formulario y asigna el id devuelto', async () => {
     let savedOptions: any = null;
 
     // Configurar el mock para capturar options y llamarlas después
@@ -167,8 +167,9 @@ describe('useCalculatorActions', () => {
       }
     });
 
-    // Tras onSuccess, el formulario debería haberse reseteado a los valores por defecto
-    expect(result.current.form.getValues('jobName')).toBe('');
+    // Guardar no limpia el formulario: solo registra el id para futuras actualizaciones.
+    expect(result.current.form.getValues('jobName')).toBe('Test Job');
+    expect(result.current.form.getValues('id')).toBe('p1');
   });
 
   it('analiza gcode y completa tiempo/peso en el formulario', async () => {

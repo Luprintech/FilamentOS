@@ -280,19 +280,19 @@ const fr = {
   tracker_login_to_add: 'Se connecter pour ajouter des pièces',
   tracker_login_to_manage: 'Connectez-vous pour créer et gérer des pièces dans vos projets.',
   hero_back: '← Tous les projets',
-  hero_badge: '✨ Suivi d\'Impression 3D',
+  hero_badge: 'Suivi d\'Impression 3D',
   hero_pieces: 'Pièces',
   hero_time: 'Temps total',
   hero_filament: 'Filament',
   hero_cost: 'Coût total',
   hero_progress: 'Progression',
   hero_pdf: 'Personnaliser PDF',
-  hero_edit: '✏️ Modifier le projet',
-  hero_delete: '🗑️ Supprimer le projet',
+  hero_edit: 'Modifier le projet',
+  hero_delete: 'Supprimer le projet',
   hero_goal_reached: '🎉 Objectif atteint ! Vous avez complété les {{goal}} pièces de "{{title}}".',
   form_title: 'Enregistrer une pièce',
   form_subtitle: 'Ajoutez l\'étiquette, le nom, le temps d\'impression total et les grammes totaux de la pièce.',
-  form_editing_badge: '✏️ Modification d\'une pièce sauvegardée',
+  form_editing_badge: '✏ Modification d\'une pièce sauvegardée',
   form_label: 'Étiquette',
   form_label_placeholder: 'Ex. : Jour 1, Pièce 5, Version A...',
   form_name: 'Nom de la pièce',
@@ -541,6 +541,30 @@ const fr = {
 
   // calculator-stats
   'calc.printedAt.label': "Date d'impression",
+  // Vue tableau des pièces
+  'stats_view_overview': 'Vue d\'ensemble',
+  'stats_view_detail': 'Détail des pièces',
+  'stats_pieces_search': 'Rechercher une pièce ou un projet...',
+  'stats_pieces_results': '{{count}} résultats sur {{total}}',
+  'stats_pieces_showing': 'Affichage de {{count}} pièces',
+  'stats_pieces_page': 'Page',
+  'stats_pieces_prev': 'Précédent',
+  'stats_pieces_next': 'Suivant',
+  'stats_pieces_table_name': 'Pièce',
+  'stats_pieces_table_status': 'Statut',
+  'stats_pieces_table_filament': 'Filament',
+  'stats_pieces_table_cost': 'Coût',
+  'stats_pieces_table_time': 'Temps',
+  'stats_pieces_table_efficiency': '€/h',
+  'stats_pieces_table_date': 'Date',
+  'stats_kpi_efficiency': 'Efficacité moy.',
+  'stats_kpi_efficiency_sub': 'coût par heure d\'impression',
+
+  // Filtro de origen
+  'stats_filter_source': 'Source',
+  'stats_filter_source_tracker': 'Journal',
+  'stats_filter_source_calculator': 'Calculateur',
+
 };
 
 export default fr;

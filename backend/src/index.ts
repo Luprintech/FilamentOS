@@ -8,6 +8,7 @@ import Database from 'better-sqlite3';
 import crypto from 'crypto';
 import fs from 'fs';
 import path from 'path';
+import bcrypt from 'bcryptjs';
 import dotenv from 'dotenv';
 import AdmZip from 'adm-zip';
 import JSZip from 'jszip';
@@ -99,11 +100,12 @@ function migrateLegacyDatabases() {
 
 db.exec(`
   CREATE TABLE IF NOT EXISTS users (
-    id        TEXT PRIMARY KEY,
-    google_id TEXT UNIQUE NOT NULL,
-    email     TEXT,
-    name      TEXT,
-    photo     TEXT
+    id            TEXT PRIMARY KEY,
+    google_id     TEXT UNIQUE,
+    email         TEXT,
+    name          TEXT,
+    photo         TEXT,
+    password_hash TEXT
   );
   CREATE TABLE IF NOT EXISTS projects (
     id         TEXT PRIMARY KEY,
@@ -249,6 +251,47 @@ db.exec(`
     fecha_aportacion TEXT DEFAULT (datetime('now')),
     usuario_id       TEXT REFERENCES users(id) ON DELETE SET NULL
   );
+`);
+
+// ── Schema migrations for existing DBs ────────────────────────────────────────
+const userColumns = db
+  .prepare("PRAGMA table_info(users)")
+  .all() as { name: string; notnull: number }[];
+const userColNames = new Set(userColumns.map((c) => c.name));
+
+if (!userColNames.has('password_hash')) {
+  db.exec("ALTER TABLE users ADD COLUMN password_hash TEXT");
+}
+
+// Fix: google_id NOT NULL constraint on existing DBs — SQLite can't ALTER constraints
+const googleIdCol = userColumns.find(c => c.name === 'google_id');
+if (googleIdCol && googleIdCol.notnull === 1) {
+  db.pragma('foreign_keys = OFF');
+  const txn = db.transaction(() => {
+    db.exec(`
+      CREATE TABLE users_mig (
+        id            TEXT PRIMARY KEY,
+        google_id     TEXT UNIQUE,
+        email         TEXT,
+        name          TEXT,
+        photo         TEXT,
+        password_hash TEXT
+      );
+      INSERT INTO users_mig (id, google_id, email, name, photo, password_hash)
+        SELECT id, google_id, email, name, photo, password_hash FROM users;
+      DROP TABLE users;
+      ALTER TABLE users_mig RENAME TO users;
+    `);
+  });
+  txn();
+  db.pragma('foreign_keys = ON');
+}
+
+// Asegurar unique index en email para login local (ignora NULLs)
+db.exec(`
+  CREATE UNIQUE INDEX IF NOT EXISTS idx_users_email
+  ON users(email)
+  WHERE email IS NOT NULL
 `);
 
 db.prepare('DELETE FROM sessions WHERE expires_at <= ?').run(Date.now());
@@ -419,12 +462,149 @@ if (trackerMaterialTables.length === 0) {
 
 migrateLegacyDatabases();
 
+// ── Tabla resources (enlaces de interés) ──────────────────────────────────────
+db.exec(`
+  CREATE TABLE IF NOT EXISTS resources (
+    id          TEXT PRIMARY KEY,
+    name        TEXT NOT NULL,
+    description TEXT NOT NULL DEFAULT '',
+    url         TEXT NOT NULL,
+    category    TEXT NOT NULL DEFAULT 'utils',
+    is_ai       INTEGER NOT NULL DEFAULT 0,
+    is_free     INTEGER NOT NULL DEFAULT 0,
+    is_new      INTEGER NOT NULL DEFAULT 0,
+    custom_image TEXT DEFAULT NULL,
+    sort_order  INTEGER NOT NULL DEFAULT 0,
+    created_at  TEXT DEFAULT (datetime('now')),
+    updated_at  TEXT DEFAULT (datetime('now'))
+  )
+`);
+
+// Seed inicial — solo si la tabla está vacía
+const resourceCount = (db.prepare('SELECT COUNT(*) as c FROM resources').get() as { c: number }).c;
+if (resourceCount === 0) {
+  const insertResource = db.prepare(`
+    INSERT INTO resources (id, name, description, url, category, is_ai, is_free, is_new, sort_order)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+  `);
+  const seedResources = [
+    ['res-001', 'Tencent Hunyuan 3D', 'Genera modelos 3D detallados a partir de texto o imagen con IA de Tencent.', 'https://3d.hunyuan.tencent.com/', 'ai', 1, 1, 0, 1],
+    ['res-002', 'Tripo3D', 'Crea modelos 3D listos para imprimir en segundos desde una foto o descripción.', 'https://www.tripo3d.ai/es', 'ai', 1, 0, 0, 2],
+    ['res-003', 'Meshy AI', 'Generador 3D con IA que produce meshes optimizados y texturas realistas.', 'https://www.meshy.ai/es', 'ai', 1, 0, 0, 3],
+    ['res-004', 'CSM 3D', 'Convierte imágenes en modelos 3D de alta calidad con IA de última generación.', 'https://3d.csm.ai/', 'ai', 1, 1, 0, 4],
+    ['res-005', 'Luma AI Genie', 'Genera objetos 3D fotorrealistas desde texto en pocos segundos.', 'https://lumalabs.ai/genie', 'ai', 1, 1, 0, 5],
+    ['res-006', 'MakerWorld', 'Plataforma de Bambu Lab con miles de modelos optimizados para impresión FDM.', 'https://makerworld.com/es', 'models', 0, 1, 0, 10],
+    ['res-007', 'Printables', 'Repositorio de Prusa con modelos verificados y comunidad muy activa.', 'https://www.printables.com/', 'models', 0, 1, 0, 11],
+    ['res-008', 'Thingiverse', 'El repositorio de modelos 3D más grande del mundo. Referencia desde 2008.', 'https://www.thingiverse.com/', 'models', 0, 1, 0, 12],
+    ['res-009', 'Cults3D', 'Marketplace con modelos gratuitos y de pago de diseñadores independientes.', 'https://cults3d.com/es', 'models', 0, 0, 0, 13],
+    ['res-010', 'MyMiniFactory', 'Modelos curados y garantizados para impresión. Comunidad de calidad.', 'https://www.myminifactory.com/', 'models', 0, 0, 0, 14],
+    ['res-011', 'Amazon', 'Amplia variedad de marcas y materiales con entrega rápida.', 'https://www.amazon.es/s?k=filamento+impresora+3d', 'filament', 0, 0, 0, 20],
+    ['res-012', 'Impresoras3D.com', 'Tienda española especializada en filamentos, impresoras y accesorios 3D.', 'https://www.impresoras3d.com/', 'filament', 0, 0, 0, 21],
+    ['res-013', 'Bambu Lab Store', 'Filamentos oficiales Bambu con perfiles optimizados para sus impresoras.', 'https://eu.store.bambulab.com/', 'filament', 0, 0, 0, 22],
+    ['res-014', '3DJake', 'Gran catálogo europeo con materiales técnicos, resinas y filamentos especiales.', 'https://www.3djake.es/', 'filament', 0, 0, 0, 23],
+    ['res-015', 'Filament2Print', 'Distribuidor europeo con más de 1000 referencias de filamentos y materiales.', 'https://filament2print.com/es/', 'filament', 0, 0, 0, 24],
+    ['res-016', 'Bambu Studio', 'Slicer oficial de Bambu Lab. Potente, rápido y con soporte multi-color.', 'https://bambulab.com/es-es/download/studio', 'slicers', 0, 1, 0, 30],
+    ['res-017', 'OrcaSlicer', 'Fork de Bambu Studio de código abierto. El favorito de los usuarios avanzados.', 'https://github.com/SoftFever/OrcaSlicer/releases', 'slicers', 0, 1, 0, 31],
+    ['res-018', 'Ultimaker Cura', 'El slicer de referencia para principiantes. Miles de perfiles de impresoras.', 'https://ultimaker.com/software/ultimaker-cura/', 'slicers', 0, 1, 0, 32],
+    ['res-019', 'PrusaSlicer', 'Slicer open source de Prusa. Excelente para modelos con soportes complejos.', 'https://www.prusa3d.com/page/prusaslicer_424/', 'slicers', 0, 1, 0, 33],
+    ['res-020', 'Chitubox', 'Slicer especializado en impresoras de resina MSLA/DLP.', 'https://www.chitubox.com/', 'slicers', 0, 1, 0, 34],
+    ['res-021', 'Teaching Tech Calibration', 'Guías interactivas paso a paso para calibrar tu impresora a la perfección.', 'https://teachingtechyt.github.io/calibration.html', 'utils', 0, 1, 0, 40],
+    ['res-022', 'Filament Colors', 'Base de datos de colores de filamento de todas las marcas, con comparativa visual.', 'https://filamentcolors.xyz/', 'utils', 0, 1, 0, 41],
+    ['res-023', 'Slicer Settings Search', 'Busca y compara configuraciones de slicer entre usuarios de la comunidad.', 'https://slicersettings.net/', 'utils', 0, 1, 0, 42],
+    ['res-024', '3D Print Calc', 'Calculadora online de costes, tiempos y consumo de filamento por pieza.', 'https://www.3dprintcalc.com/', 'utils', 0, 1, 0, 43],
+  ] as const;
+  for (const r of seedResources) insertResource.run(...r);
+}
+
+// ── Tabla lupe_settings (configuración del admin) ─────────────────────────────
+db.exec(`
+  CREATE TABLE IF NOT EXISTS lupe_settings (
+    key   TEXT PRIMARY KEY,
+    value TEXT NOT NULL
+  )
+`);
+
+// ── Tabla resource_categories ──────────────────────────────────────────────────
+db.exec(`
+  CREATE TABLE IF NOT EXISTS resource_categories (
+    id         TEXT PRIMARY KEY,
+    label_es   TEXT NOT NULL,
+    label_en   TEXT NOT NULL,
+    color      TEXT NOT NULL DEFAULT 'text-muted-foreground',
+    badge_cls  TEXT NOT NULL DEFAULT '',
+    sort_order INTEGER NOT NULL DEFAULT 99,
+    created_at TEXT DEFAULT (datetime('now'))
+  )
+`);
+
+// Seed inicial de categorías
+const catCount = (db.prepare('SELECT COUNT(*) as c FROM resource_categories').get() as { c: number }).c;
+if (catCount === 0) {
+  const insertCat = db.prepare(`INSERT INTO resource_categories (id, label_es, label_en, color, badge_cls, sort_order) VALUES (?, ?, ?, ?, ?, ?)`);
+  insertCat.run('ai',       'IA 3D',      'AI 3D',       'text-[hsl(var(--challenge-blue))]',  'border-[hsl(var(--challenge-blue))]/30 bg-[hsl(var(--challenge-blue))]/10 text-[hsl(var(--challenge-blue))]', 1);
+  insertCat.run('models',   'Modelos',    'Models',      'text-[hsl(var(--challenge-green))]', 'border-[hsl(var(--challenge-green))]/30 bg-[hsl(var(--challenge-green))]/10 text-[hsl(var(--challenge-green))]', 2);
+  insertCat.run('filament', 'Filamento',  'Filament',    'text-yellow-400',                   'border-yellow-400/30 bg-yellow-400/10 text-yellow-400', 3);
+  insertCat.run('slicers',  'Slicers',    'Slicers',     'text-violet-400',                   'border-violet-400/30 bg-violet-400/10 text-violet-400', 4);
+  insertCat.run('utils',    'Utilidades', 'Utilities',   'text-orange-400',                   'border-orange-400/30 bg-orange-400/10 text-orange-400', 5);
+}
+
+// Add extra_tags column to resources (safe migration)
+try { db.exec(`ALTER TABLE resources ADD COLUMN extra_tags TEXT NOT NULL DEFAULT '[]'`); } catch (_) { /* already exists */ }
+
+// Add is_disabled column to tracker_pieces (safe migration)
+try { db.exec(`ALTER TABLE tracker_pieces ADD COLUMN is_disabled INTEGER NOT NULL DEFAULT 0`); } catch (_) { /* already exists */ }
+
+// ── Email auth migrations ─────────────────────────────────────────────────────
+try { db.exec('ALTER TABLE users ADD COLUMN email_verified INTEGER NOT NULL DEFAULT 0'); } catch (_) { /* ya existe */ }
+
+db.exec(`
+  CREATE TABLE IF NOT EXISTS email_tokens (
+    id         TEXT PRIMARY KEY,
+    user_id    TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    token      TEXT NOT NULL UNIQUE,
+    type       TEXT NOT NULL CHECK(type IN ('verify', 'reset')),
+    expires_at INTEGER NOT NULL,
+    used       INTEGER NOT NULL DEFAULT 0,
+    created_at TEXT DEFAULT (datetime('now'))
+  )
+`);
+
+// ── Session type augmentation ─────────────────────────────────────────────────
+db.exec(`
+  CREATE TABLE IF NOT EXISTS resource_tags (
+    id         TEXT PRIMARY KEY,
+    label      TEXT NOT NULL,
+    badge_cls  TEXT NOT NULL DEFAULT 'border-border/50 bg-muted/20 text-muted-foreground',
+    sort_order INTEGER NOT NULL DEFAULT 99,
+    created_at TEXT DEFAULT (datetime('now'))
+  )
+`);
+
+const tagCount = (db.prepare('SELECT COUNT(*) as c FROM resource_tags').get() as { c: number }).c;
+if (tagCount === 0) {
+  const insertTag = db.prepare(`INSERT INTO resource_tags (id, label, badge_cls, sort_order) VALUES (?, ?, ?, ?)`);
+  insertTag.run('recomendado', 'Recomendado', 'border-amber-400/30 bg-amber-400/10 text-amber-400', 1);
+  insertTag.run('popular',     'Popular',     'border-rose-400/30 bg-rose-400/10 text-rose-400',   2);
+  insertTag.run('beta',        'Beta',        'border-cyan-400/30 bg-cyan-400/10 text-cyan-400',   3);
+  insertTag.run('pro',         'Pro',         'border-purple-400/30 bg-purple-400/10 text-purple-400', 4);
+  insertTag.run('espanol',     'En español',  'border-orange-400/30 bg-orange-400/10 text-orange-400', 5);
+}
+
+// ── Session type augmentation ─────────────────────────────────────────────────
+declare module 'express-session' {
+  interface SessionData {
+    isAdmin?: boolean;
+  }
+}
+
 interface DbUser {
   id: string;
-  google_id: string;
+  google_id: string | null;
   email: string | null;
   name: string | null;
   photo: string | null;
+  password_hash: string | null;
+  email_verified: number;
 }
 
 class SQLiteSessionStore extends session.Store {
@@ -528,7 +708,7 @@ passport.serializeUser((user, done) => done(null, (user as DbUser).id));
 
 passport.deserializeUser((id: unknown, done) => {
   const user = db
-    .prepare('SELECT id, email, name, photo FROM users WHERE id = ?')
+    .prepare('SELECT id, google_id, email, name, photo FROM users WHERE id = ?')
     .get(id as string) as DbUser | undefined;
   done(null, user ?? false);
 });
@@ -568,6 +748,28 @@ const uploadLogo = multer({
       // Rechazar el archivo con un error
       cb(new Error('Solo se permiten imágenes PNG, JPG o SVG'));
     }
+  },
+});
+
+
+// Multer para imágenes de recursos (panel /lupe)
+const resourceImageStorage = multer.diskStorage({
+  destination: (_req, _file, cb) => {
+    const dir = path.resolve(__dirname, '../uploads/resources');
+    if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
+    cb(null, dir);
+  },
+  filename: (_req, file, cb) => {
+    const ext = path.extname(file.originalname);
+    cb(null, `resource-${crypto.randomUUID()}${ext}`);
+  },
+});
+const uploadResourceImage = multer({
+  storage: resourceImageStorage,
+  limits: { fileSize: 3 * 1024 * 1024 },
+  fileFilter: (_req, file, cb) => {
+    const allowed = ['image/png', 'image/jpeg', 'image/jpg', 'image/webp'];
+    cb(null, allowed.includes(file.mimetype));
   },
 });
 
@@ -625,6 +827,159 @@ app.get('/api/auth/logout', (req, res) => {
   req.logout(() => res.redirect(CLIENT_ORIGIN));
 });
 
+// ── Email + Password Auth ────────────────────────────────────────────────────
+
+// ── Email helpers ─────────────────────────────────────────────────────────────
+function createMailTransporter() {
+  const { SMTP_HOST, SMTP_PORT, SMTP_USER, SMTP_PASS } = process.env;
+  if (!SMTP_HOST || !SMTP_USER || !SMTP_PASS) return null;
+  const port = parseInt(SMTP_PORT || '587', 10);
+  return nodemailer.createTransport({
+    host: SMTP_HOST,
+    port,
+    secure: port === 465,
+    auth: { user: SMTP_USER, pass: SMTP_PASS },
+  });
+}
+
+async function sendAuthEmail(to: string, subject: string, html: string): Promise<void> {
+  const transporter = createMailTransporter();
+  if (!transporter) {
+    console.log('[EMAIL] SMTP no configurado — email no enviado a:', to);
+    return;
+  }
+  await transporter.sendMail({ from: `"FilamentOS" <${process.env.SMTP_USER}>`, to, subject, html });
+}
+
+function emailVerifyHtml(name: string, link: string): string {
+  return `<div style="font-family:Arial,sans-serif;max-width:580px;margin:0 auto;background:#f9f9f9;padding:32px;border-radius:16px">
+    <h2 style="color:#8b5cf6;margin-top:0">¡Bienvenido a FilamentOS, ${name}!</h2>
+    <p style="color:#444;font-size:15px">Haz clic en el botón para verificar tu cuenta y empezar a usar FilamentOS.</p>
+    <div style="text-align:center;margin:32px 0">
+      <a href="${link}" style="background:#8b5cf6;color:#fff;text-decoration:none;padding:14px 32px;border-radius:999px;font-weight:bold;font-size:16px;display:inline-block">
+        Verificar mi cuenta
+      </a>
+    </div>
+    <p style="color:#999;font-size:12px">Si no creaste esta cuenta, ignora este correo. El enlace caduca en 24 horas.</p>
+  </div>`;
+}
+
+function emailResetHtml(link: string): string {
+  return `<div style="font-family:Arial,sans-serif;max-width:580px;margin:0 auto;background:#f9f9f9;padding:32px;border-radius:16px">
+    <h2 style="color:#8b5cf6;margin-top:0">Restablecer contraseña</h2>
+    <p style="color:#444;font-size:15px">Recibimos una solicitud para restablecer la contraseña de tu cuenta de FilamentOS.</p>
+    <div style="text-align:center;margin:32px 0">
+      <a href="${link}" style="background:#8b5cf6;color:#fff;text-decoration:none;padding:14px 32px;border-radius:999px;font-weight:bold;font-size:16px;display:inline-block">
+        Restablecer contraseña
+      </a>
+    </div>
+    <p style="color:#999;font-size:12px">Si no solicitaste esto, ignora este correo. El enlace caduca en 1 hora.</p>
+  </div>`;
+}
+
+// POST /api/auth/register — crear cuenta con email y password
+app.post('/api/auth/register', async (req, res) => {
+  try {
+    const { email, password, name } = req.body as { email?: string; password?: string; name?: string };
+
+    if (!email || !email.trim()) {
+      res.status(400).json({ error: 'El email es obligatorio' });
+      return;
+    }
+    if (!password || password.length < 6) {
+      res.status(400).json({ error: 'La contraseña debe tener al menos 6 caracteres' });
+      return;
+    }
+    if (!name || !name.trim()) {
+      res.status(400).json({ error: 'El nombre es obligatorio' });
+      return;
+    }
+
+    const normalizedEmail = email.trim().toLowerCase();
+
+    const existing = db.prepare('SELECT id FROM users WHERE email = ?').get(normalizedEmail);
+    if (existing) {
+      res.status(409).json({ error: 'Ya existe una cuenta con este email' });
+      return;
+    }
+
+    const id = crypto.randomUUID();
+    const passwordHash = bcrypt.hashSync(password, 10);
+
+    db.prepare(
+      'INSERT INTO users (id, google_id, email, name, password_hash, email_verified) VALUES (?, NULL, ?, ?, ?, 0)'
+    ).run(id, normalizedEmail, name.trim(), passwordHash);
+
+    // Crear token de verificación (caduca en 24h)
+    const verifyToken = crypto.randomBytes(32).toString('hex');
+    db.prepare(
+      'INSERT INTO email_tokens (id, user_id, token, type, expires_at) VALUES (?, ?, ?, ?, ?)'
+    ).run(crypto.randomUUID(), id, verifyToken, 'verify', Date.now() + 24 * 60 * 60 * 1000);
+
+    // Enviar email de verificación (best-effort)
+    const verifyLink = `${CLIENT_ORIGIN}/api/auth/verify-email?token=${verifyToken}`;
+    try {
+      await sendAuthEmail(normalizedEmail, 'Verifica tu cuenta en FilamentOS', emailVerifyHtml(name.trim(), verifyLink));
+    } catch (mailErr) {
+      console.error('[REGISTER] Error enviando email de verificación:', mailErr);
+    }
+
+    res.status(201).json({ pending: true, email: normalizedEmail });
+  } catch (error) {
+    console.error('[REGISTER]', error);
+    res.status(500).json({ error: 'Error al registrar usuario' });
+  }
+});
+
+// POST /api/auth/login — iniciar sesión con email y password
+app.post('/api/auth/login', async (req, res) => {
+  try {
+    const { email, password } = req.body as { email?: string; password?: string };
+
+    if (!email || !password) {
+      res.status(400).json({ error: 'Email y contraseña son obligatorios' });
+      return;
+    }
+
+    const normalizedEmail = email.trim().toLowerCase();
+    const user = db.prepare('SELECT * FROM users WHERE email = ?').get(normalizedEmail) as (DbUser & { password_hash: string | null }) | undefined;
+
+    if (!user) {
+      res.status(401).json({ error: 'Email o contraseña incorrectos' });
+      return;
+    }
+
+    if (!user.password_hash) {
+      res.status(401).json({ error: 'Esta cuenta usa Google. Inicia sesión con Google.' });
+      return;
+    }
+
+    const valid = bcrypt.compareSync(password, user.password_hash);
+    if (!valid) {
+      res.status(401).json({ error: 'Email o contraseña incorrectos' });
+      return;
+    }
+
+    if (!user.email_verified) {
+      res.status(403).json({ error: 'email_not_verified', email: normalizedEmail });
+      return;
+    }
+
+    req.login(user, (err) => {
+      if (err) {
+        res.status(500).json({ error: 'Error al iniciar sesión' });
+        return;
+      }
+      res.json({
+        user: { id: user.id, email: user.email, name: user.name, photo: user.photo },
+      });
+    });
+  } catch (error) {
+    console.error('[LOGIN]', error);
+    res.status(500).json({ error: 'Error al iniciar sesión' });
+  }
+});
+
 // ── Dev-only: login inmediato como usuario de seed ────────────────────────────
 // Solo activo fuera de producción. Permite saltar Google OAuth en desarrollo local.
 if (process.env.NODE_ENV !== 'production') {
@@ -652,13 +1007,12 @@ if (process.env.NODE_ENV !== 'production') {
 
 app.get('/api/auth/user', (req, res) => {
   if (!req.isAuthenticated()) {
-    // Endpoint de estado de sesión para el frontend:
-    // devolvemos 200 con user null para evitar ruido de 401 esperado
-    // cuando el usuario simplemente no inició sesión aún.
     res.json({ user: null });
     return;
   }
-  res.json({ user: req.user });
+  const user = req.user as DbUser;
+  const authMethod = user.google_id ? 'google' : 'email';
+  res.json({ user: { ...user, password_hash: undefined, authMethod } });
 });
 
 // POST /api/auth/guest/start - Iniciar sesión como invitado
@@ -691,6 +1045,75 @@ function requireAuth(
   }
   next();
 }
+
+// ── Perfil de usuario ─────────────────────────────────────────────────────────
+
+/** GET /api/user/me — datos del perfil del usuario */
+app.get('/api/user/me', requireAuth, (req, res) => {
+  const user = req.user as DbUser;
+  // deserializeUser no incluye password_hash, consultamos la BD
+  const freshUser = db.prepare('SELECT password_hash FROM users WHERE id=?').get(user.id) as { password_hash: string | null } | undefined;
+  const hasPassword = !!(freshUser?.password_hash);
+  const isGoogleAccount = !!user.google_id;
+
+  // Estadísticas rápidas
+  const stats = db.prepare(`
+    SELECT
+      (SELECT COUNT(*) FROM tracker_projects WHERE user_id=?) AS projects,
+      (SELECT COUNT(*) FROM tracker_pieces   WHERE user_id=?) AS pieces,
+      (SELECT COUNT(*) FROM filament_inventory WHERE user_id=? AND status='active') AS spools
+  `).get(user.id, user.id, user.id) as { projects: number; pieces: number; spools: number };
+
+  res.json({
+    id: user.id,
+    name: user.name,
+    email: user.email,
+    photo: user.photo,
+    hasPassword,
+    isGoogleAccount,
+    stats,
+  });
+});
+
+/** PUT /api/user/name — cambiar nombre visible */
+app.put('/api/user/name', requireAuth, (req, res) => {
+  const user = req.user as DbUser;
+  const { name } = req.body as { name?: string };
+  if (!name || !name.trim()) { res.status(400).json({ error: 'El nombre no puede estar vacío.' }); return; }
+  db.prepare(`UPDATE users SET name=? WHERE id=?`).run(name.trim(), user.id);
+  res.json({ success: true, name: name.trim() });
+});
+
+/** PUT /api/user/password — cambiar contraseña (solo cuentas locales) */
+app.put('/api/user/password', requireAuth, (req, res) => {
+  const user = req.user as DbUser & { password_hash: string | null };
+  if (!user.password_hash) { res.status(400).json({ error: 'Esta cuenta usa inicio de sesión con Google.' }); return; }
+  const { currentPassword, newPassword } = req.body as { currentPassword?: string; newPassword?: string };
+  if (!currentPassword || !newPassword) { res.status(400).json({ error: 'Faltan campos.' }); return; }
+  if (newPassword.length < 6) { res.status(400).json({ error: 'La nueva contraseña debe tener al menos 6 caracteres.' }); return; }
+  const fresh = db.prepare('SELECT password_hash FROM users WHERE id=?').get(user.id) as { password_hash: string } | undefined;
+  if (!fresh || !bcrypt.compareSync(currentPassword, fresh.password_hash)) {
+    res.status(400).json({ error: 'La contraseña actual no es correcta.' }); return;
+  }
+  const newHash = bcrypt.hashSync(newPassword, 10);
+  db.prepare(`UPDATE users SET password_hash=? WHERE id=?`).run(newHash, user.id);
+  res.json({ success: true });
+});
+
+/** DELETE /api/user — eliminar cuenta y todos los datos */
+app.delete('/api/user', requireAuth, (req, res) => {
+  const user = req.user as DbUser;
+  const { confirmation } = req.body as { confirmation?: string };
+  if (confirmation !== 'ELIMINAR') { res.status(400).json({ error: 'Escribe ELIMINAR para confirmar.' }); return; }
+  // Cascade elimina proyectos, piezas, inventario, etc. gracias a ON DELETE CASCADE
+  db.prepare('DELETE FROM users WHERE id=?').run(user.id);
+  req.logout((err) => {
+    if (err) { res.status(500).json({ error: 'Error cerrando sesión.' }); return; }
+    req.session.destroy(() => {
+      res.json({ success: true });
+    });
+  });
+});
 
 // ── Proyectos ─────────────────────────────────────────────────────────────────
 app.get('/api/projects', requireAuth, (req, res) => {
@@ -932,7 +1355,7 @@ app.get('/api/tracker/projects/:projectId/pieces', requireAuth, (req, res) => {
       id: string; project_id: string; order_index: number; label: string; name: string;
       time_text: string; gram_text: string; total_secs: number;
       total_grams: number; total_cost: number; time_lines: number;
-      gram_lines: number; image_url: string | null; notes: string; status: string; printed_at: string | null; incident: string; spool_id: string | null; created_at: string; plate_count: number; file_link: string | null;
+      gram_lines: number; image_url: string | null; notes: string; status: string; printed_at: string | null; incident: string; spool_id: string | null; created_at: string; plate_count: number; file_link: string | null; is_disabled: number;
     }[];
 
   const pieces = rows.map((r) => ({
@@ -948,6 +1371,7 @@ app.get('/api/tracker/projects/:projectId/pieces', requireAuth, (req, res) => {
     spoolId: r.spool_id ?? null,
     plateCount: r.plate_count ?? 1,
     fileLink: r.file_link ?? null,
+    disabled: r.is_disabled === 1,
     filaments: [] as { id: string; pieceId: string; spoolId: string | null; colorHex: string; colorName: string; brand: string; material: string; grams: number }[],
     materials: [] as { id: string; pieceId: string; name: string; quantity: number; cost: number }[],
   }));
@@ -1315,6 +1739,17 @@ app.delete('/api/tracker/projects/:projectId/pieces/:id', requireAuth, (req, res
     .run(req.params.id, user.id);
   if (result.changes === 0) { res.status(404).json({ error: 'Pieza no encontrada.' }); return; }
   res.json({ success: true });
+});
+
+// ── Toggle disabled state ──────────────────────────────────────────────────────
+app.patch('/api/tracker/projects/:projectId/pieces/:id/disabled', requireAuth, (req, res) => {
+  const user = req.user as DbUser;
+  const { disabled } = req.body as { disabled: boolean };
+  const result = db
+    .prepare(`UPDATE tracker_pieces SET is_disabled=? WHERE id=? AND project_id=? AND user_id=?`)
+    .run(disabled ? 1 : 0, req.params.id, req.params.projectId, user.id);
+  if (result.changes === 0) { res.status(404).json({ error: 'Pieza no encontrada.' }); return; }
+  res.json({ success: true, disabled });
 });
 
 // ── Inventory: filament spools ────────────────────────────────────────────────
@@ -2205,6 +2640,206 @@ function isValidIsoDate(value: string): boolean {
   return /^\d{4}-\d{2}-\d{2}(T[\d:.Z+-]*)?$/.test(value);
 }
 
+// ── Panel /lupe — Admin de recursos ──────────────────────────────────────────
+
+function requireAdmin(
+  req: express.Request,
+  res: express.Response,
+  next: express.NextFunction
+) {
+  if (!req.session.isAdmin) {
+    res.status(401).json({ error: 'No autorizado' });
+    return;
+  }
+  next();
+}
+
+app.post('/api/lupe/login', (req, res) => {
+  const { user, pass } = req.body as { user?: string; pass?: string };
+  const adminUser = process.env.LUPE_ADMIN_USER || 'lupe';
+  const envPass = process.env.LUPE_ADMIN_PASS || '';
+  // Check for overridden password in settings, fall back to .env
+  const settingRow = db.prepare('SELECT value FROM lupe_settings WHERE key = ?').get('admin_pass') as { value: string } | undefined;
+  const adminPass = settingRow?.value || envPass;
+  if (!adminPass) { res.status(503).json({ error: 'Admin no configurado' }); return; }
+  if (user === adminUser && pass === adminPass) {
+    req.session.isAdmin = true;
+    res.json({ ok: true });
+  } else {
+    res.status(401).json({ error: 'Credenciales incorrectas' });
+  }
+});
+
+app.post('/api/lupe/logout', (req, res) => {
+  req.session.isAdmin = false;
+  res.json({ ok: true });
+});
+
+app.get('/api/lupe/me', (req, res) => {
+  res.json({ isAdmin: !!req.session.isAdmin });
+});
+
+app.put('/api/lupe/password', requireAdmin, (req, res) => {
+  const { currentPass, newPass } = req.body as { currentPass?: string; newPass?: string };
+  if (!newPass || (newPass as string).length < 6) {
+    res.status(400).json({ error: 'La nueva contraseña debe tener al menos 6 caracteres' }); return;
+  }
+  const envPass = process.env.LUPE_ADMIN_PASS || '';
+  const settingRow = db.prepare('SELECT value FROM lupe_settings WHERE key = ?').get('admin_pass') as { value: string } | undefined;
+  const currentActualPass = settingRow?.value || envPass;
+  if (currentPass !== currentActualPass) {
+    res.status(401).json({ error: 'Contraseña actual incorrecta' }); return;
+  }
+  db.prepare(`INSERT INTO lupe_settings (key, value) VALUES ('admin_pass', ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value`).run(newPass);
+  res.json({ ok: true });
+});
+
+app.get('/api/categories', (_req, res) => {
+  const rows = db.prepare('SELECT * FROM resource_categories ORDER BY sort_order ASC').all();
+  res.json(rows);
+});
+
+app.get('/api/lupe/categories', requireAdmin, (_req, res) => {
+  const rows = db.prepare('SELECT * FROM resource_categories ORDER BY sort_order ASC').all();
+  res.json(rows);
+});
+
+app.post('/api/lupe/categories', requireAdmin, (req, res) => {
+  const { label_es, label_en, color, badge_cls, sort_order } = req.body as Record<string, unknown>;
+  if (!label_es) { res.status(400).json({ error: 'El nombre es obligatorio' }); return; }
+  const base = (label_es as string).toLowerCase().replace(/[^a-z0-9]/g, '_').slice(0, 24);
+  const id = base + '_' + Date.now().toString(36);
+  db.prepare(`INSERT INTO resource_categories (id, label_es, label_en, color, badge_cls, sort_order) VALUES (?, ?, ?, ?, ?, ?)`)
+    .run(id, label_es, label_en || label_es, color || 'text-muted-foreground', badge_cls || '', sort_order ?? 99);
+  res.status(201).json(db.prepare('SELECT * FROM resource_categories WHERE id = ?').get(id));
+});
+
+app.put('/api/lupe/categories/:id', requireAdmin, (req, res) => {
+  const { id } = req.params;
+  const { label_es, label_en, color, badge_cls, sort_order } = req.body as Record<string, unknown>;
+  db.prepare(`UPDATE resource_categories SET label_es=?, label_en=?, color=?, badge_cls=?, sort_order=? WHERE id=?`)
+    .run(label_es, label_en || label_es, color, badge_cls, sort_order ?? 99, id);
+  const updated = db.prepare('SELECT * FROM resource_categories WHERE id = ?').get(id);
+  if (!updated) { res.status(404).json({ error: 'No encontrada' }); return; }
+  res.json(updated);
+});
+
+app.delete('/api/lupe/categories/:id', requireAdmin, (req, res) => {
+  if (!db.prepare('SELECT id FROM resource_categories WHERE id = ?').get(req.params.id)) {
+    res.status(404).json({ error: 'No encontrada' }); return;
+  }
+  db.prepare('DELETE FROM resource_categories WHERE id = ?').run(req.params.id);
+  res.json({ ok: true });
+});
+
+// ── Tags endpoints ─────────────────────────────────────────────────────────────
+
+app.get('/api/tags', (_req, res) => {
+  res.json(db.prepare('SELECT * FROM resource_tags ORDER BY sort_order ASC').all());
+});
+
+app.get('/api/lupe/tags', requireAdmin, (_req, res) => {
+  res.json(db.prepare('SELECT * FROM resource_tags ORDER BY sort_order ASC').all());
+});
+
+app.post('/api/lupe/tags', requireAdmin, (req, res) => {
+  const { label, badge_cls, sort_order } = req.body as Record<string, unknown>;
+  if (!label) { res.status(400).json({ error: 'El nombre es obligatorio' }); return; }
+  const base = (label as string).toLowerCase().replace(/[^a-z0-9]/g, '_').slice(0, 24);
+  const id = base + '_' + Date.now().toString(36);
+  db.prepare(`INSERT INTO resource_tags (id, label, badge_cls, sort_order) VALUES (?, ?, ?, ?)`)
+    .run(id, label, badge_cls || 'border-border/50 bg-muted/20 text-muted-foreground', sort_order ?? 99);
+  res.status(201).json(db.prepare('SELECT * FROM resource_tags WHERE id = ?').get(id));
+});
+
+app.put('/api/lupe/tags/:id', requireAdmin, (req, res) => {
+  const { id } = req.params;
+  const { label, badge_cls, sort_order } = req.body as Record<string, unknown>;
+  db.prepare(`UPDATE resource_tags SET label=?, badge_cls=?, sort_order=? WHERE id=?`)
+    .run(label, badge_cls, sort_order ?? 99, id);
+  const updated = db.prepare('SELECT * FROM resource_tags WHERE id = ?').get(id);
+  if (!updated) { res.status(404).json({ error: 'No encontrada' }); return; }
+  res.json(updated);
+});
+
+app.delete('/api/lupe/tags/:id', requireAdmin, (req, res) => {
+  if (!db.prepare('SELECT id FROM resource_tags WHERE id = ?').get(req.params.id)) {
+    res.status(404).json({ error: 'No encontrada' }); return;
+  }
+  db.prepare('DELETE FROM resource_tags WHERE id = ?').run(req.params.id);
+  res.json({ ok: true });
+});
+
+app.get('/api/resources', (_req, res) => {
+  const rows = db.prepare('SELECT * FROM resources ORDER BY sort_order ASC, created_at ASC').all();
+  res.json(rows);
+});
+
+app.get('/api/lupe/resources', requireAdmin, (_req, res) => {
+  const rows = db.prepare('SELECT * FROM resources ORDER BY sort_order ASC, created_at ASC').all();
+  res.json(rows);
+});
+
+app.post('/api/lupe/resources', requireAdmin, (req, res) => {
+  const { name, description, url, category, is_ai, is_free, is_new, sort_order, extra_tags } = req.body as Record<string, unknown>;
+  const id = crypto.randomUUID();
+  const tagsJson = Array.isArray(extra_tags) ? JSON.stringify(extra_tags) : (extra_tags as string ?? '[]');
+  db.prepare(`INSERT INTO resources (id, name, description, url, category, is_ai, is_free, is_new, sort_order, extra_tags) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+  ).run(id, name, description, url, category, is_ai ? 1 : 0, is_free ? 1 : 0, is_new ? 1 : 0, sort_order ?? 99, tagsJson);
+  res.status(201).json(db.prepare('SELECT * FROM resources WHERE id = ?').get(id));
+});
+
+app.put('/api/lupe/resources/:id', requireAdmin, (req, res) => {
+  const { id } = req.params;
+  const { name, description, url, category, is_ai, is_free, is_new, sort_order, extra_tags } = req.body as Record<string, unknown>;
+  const tagsJson = Array.isArray(extra_tags) ? JSON.stringify(extra_tags) : (extra_tags as string ?? '[]');
+  db.prepare(`UPDATE resources SET name=?, description=?, url=?, category=?, is_ai=?, is_free=?, is_new=?, sort_order=?, extra_tags=?, updated_at=datetime('now') WHERE id=?`
+  ).run(name, description, url, category, is_ai ? 1 : 0, is_free ? 1 : 0, is_new ? 1 : 0, sort_order ?? 99, tagsJson, id);
+  const updated = db.prepare('SELECT * FROM resources WHERE id = ?').get(id);
+  if (!updated) { res.status(404).json({ error: 'No encontrado' }); return; }
+  res.json(updated);
+});
+
+app.delete('/api/lupe/resources/:id', requireAdmin, (req, res) => {
+  const row = db.prepare('SELECT * FROM resources WHERE id = ?').get(req.params.id) as any;
+  if (!row) { res.status(404).json({ error: 'No encontrado' }); return; }
+  if (row.custom_image) {
+    const imgPath = path.resolve(__dirname, '../uploads/resources', path.basename(row.custom_image));
+    if (fs.existsSync(imgPath)) fs.unlinkSync(imgPath);
+  }
+  db.prepare('DELETE FROM resources WHERE id = ?').run(req.params.id);
+  res.json({ ok: true });
+});
+
+app.post('/api/lupe/resources/:id/image', requireAdmin, (req, res) => {
+  uploadResourceImage.single('image')(req, res, (err: any) => {
+    if (err) { res.status(400).json({ error: err.message || 'Error al subir imagen' }); return; }
+    if (!req.file) { res.status(400).json({ error: 'No se recibió ningún archivo' }); return; }
+    const { id } = req.params;
+    const old = db.prepare('SELECT custom_image FROM resources WHERE id = ?').get(id) as any;
+    if (old?.custom_image) {
+      const oldPath = path.resolve(__dirname, '../uploads/resources', path.basename(old.custom_image));
+      if (fs.existsSync(oldPath)) fs.unlinkSync(oldPath);
+    }
+    const imageUrl = `/uploads/resources/${req.file.filename}`;
+    db.prepare("UPDATE resources SET custom_image=?, updated_at=datetime('now') WHERE id=?").run(imageUrl, id);
+    res.json({ imageUrl });
+  });
+});
+
+app.delete('/api/lupe/resources/:id/image', requireAdmin, (req, res) => {
+  const row = db.prepare('SELECT custom_image FROM resources WHERE id = ?').get(req.params.id) as any;
+  if (!row) { res.status(404).json({ error: 'No encontrado' }); return; }
+  if (row.custom_image) {
+    const imgPath = path.resolve(__dirname, '../uploads/resources', path.basename(row.custom_image));
+    if (fs.existsSync(imgPath)) fs.unlinkSync(imgPath);
+    db.prepare("UPDATE resources SET custom_image=NULL, updated_at=datetime('now') WHERE id=?").run(req.params.id);
+  }
+  res.json({ ok: true });
+});
+
+app.use('/uploads/resources', express.static(path.resolve(__dirname, '../uploads/resources')));
+
 // GET /api/stats
 app.get('/api/stats', requireAuth, (req, res) => {
   const user = req.user as DbUser;
@@ -2924,65 +3559,19 @@ app.post('/api/filaments-community', requireAuth, (req, res) => {
     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
   `).run(
     String(codigo).trim(),
-    marca || null, nombre || null, color || null, colorHex || null,
-    material || null, diametro || null, peso || null,
-    tempMin || null, tempMax || null, user.id,
+    String(marca || '').trim() || null,
+    String(nombre || '').trim() || null,
+    String(color || '').trim() || null,
+    String(colorHex || '').trim() || null,
+    String(material || '').trim() || null,
+    parseFloat(String(diametro)) || 1.75,
+    parseFloat(String(peso)) || null,
+    parseFloat(String(tempMin)) || null,
+    parseFloat(String(tempMax)) || null,
+    user.id,
   );
-
   res.json({ success: true });
 });
-
-// ── GET consumos por bobina ────────────────────────────────────────────────────
-app.get('/api/inventory/:spoolId/consumos', requireAuth, (req, res) => {
-  const user = req.user as DbUser;
-  const spool = db
-    .prepare('SELECT id FROM filament_inventory WHERE id = ? AND user_id = ?')
-    .get(req.params.spoolId, user.id);
-  if (!spool) { res.status(404).json({ error: 'Bobina no encontrada.' }); return; }
-
-  const rows = db.prepare(`
-    SELECT c.id, c.bobina_id, c.proyecto_id, c.gramos, c.fecha,
-           p.job_name
-    FROM consumos c
-    LEFT JOIN projects p ON p.id = c.proyecto_id
-    WHERE c.bobina_id = ?
-    ORDER BY c.fecha DESC
-    LIMIT 50
-  `).all(req.params.spoolId) as Array<{ id: number; bobina_id: string; proyecto_id: string; gramos: number; fecha: string; job_name: string | null }>;
-
-  res.json(rows);
-});
-
-// ── Producción ────────────────────────────────────────────────────────────────
-if (process.env.NODE_ENV === 'production') {
-  const distPath = path.resolve(__dirname, '../../frontend/dist');
-
-  // Assets con hash (Vite los genera inmutables): cacheables 1 año.
-  // index.html y manifest.json: nunca cacheados para que el navegador
-  // siempre reciba la versión actualizada tras un nuevo deploy.
-  app.use(
-    express.static(distPath, {
-      setHeaders(res, filePath) {
-        if (
-          filePath.endsWith('index.html') ||
-          filePath.endsWith('manifest.json')
-        ) {
-          res.setHeader('Cache-Control', 'no-store, no-cache, must-revalidate');
-          res.setHeader('Pragma', 'no-cache');
-        } else {
-          res.setHeader('Cache-Control', 'public, max-age=31536000, immutable');
-        }
-      },
-    })
-  );
-
-  // Fallback SPA — también sin caché para evitar servir HTML con hashes viejos.
-  app.get('*', (_req, res) => {
-    res.setHeader('Cache-Control', 'no-store, no-cache, must-revalidate');
-    res.setHeader('Pragma', 'no-cache');
-    res.sendFile(path.join(distPath, 'index.html'));
-  });
-}
 
 // ── Test helpers (solo en NODE_ENV=test) ─────────────────────────────────────
 if (process.env.NODE_ENV === 'test') {
@@ -2996,6 +3585,112 @@ if (process.env.NODE_ENV === 'test') {
     });
   });
 }
+
+// ── GET /api/auth/verify-email?token=xxx — verificar cuenta ──────────────────
+app.get('/api/auth/verify-email', async (req, res) => {
+  const { token } = req.query as { token?: string };
+  if (!token) { res.status(400).json({ error: 'Token requerido' }); return; }
+
+  const row = db.prepare(
+    "SELECT * FROM email_tokens WHERE token=? AND type='verify' AND used=0"
+  ).get(token) as { id: string; user_id: string; expires_at: number } | undefined;
+
+  if (!row) {
+    res.redirect(`${CLIENT_ORIGIN}/login?error=token_invalid`);
+    return;
+  }
+  if (row.expires_at < Date.now()) {
+    res.redirect(`${CLIENT_ORIGIN}/login?error=token_expired`);
+    return;
+  }
+
+  db.prepare('UPDATE users SET email_verified=1 WHERE id=?').run(row.user_id);
+  db.prepare('UPDATE email_tokens SET used=1 WHERE id=?').run(row.id);
+
+  const user = db.prepare('SELECT * FROM users WHERE id=?').get(row.user_id) as DbUser;
+  req.login(user, (err) => {
+    if (err) { res.redirect(`${CLIENT_ORIGIN}/login?error=login_failed`); return; }
+    res.redirect(`${CLIENT_ORIGIN}/login?verified=1`);
+  });
+});
+
+// ── POST /api/auth/resend-verification — reenviar email de verificación ───────
+app.post('/api/auth/resend-verification', async (req, res) => {
+  const { email } = req.body as { email?: string };
+  if (!email) { res.status(400).json({ error: 'Email requerido' }); return; }
+  const normalizedEmail = email.trim().toLowerCase();
+  const user = db.prepare('SELECT * FROM users WHERE email=?').get(normalizedEmail) as (DbUser & { email_verified: number }) | undefined;
+  // Siempre 200 por seguridad
+  if (!user || user.email_verified) { res.json({ ok: true }); return; }
+
+  // Invalidar tokens anteriores
+  db.prepare("UPDATE email_tokens SET used=1 WHERE user_id=? AND type='verify'").run(user.id);
+
+  const token = crypto.randomBytes(32).toString('hex');
+  db.prepare(
+    'INSERT INTO email_tokens (id, user_id, token, type, expires_at) VALUES (?, ?, ?, ?, ?)'
+  ).run(crypto.randomUUID(), user.id, token, 'verify', Date.now() + 24 * 60 * 60 * 1000);
+
+  const link = `${CLIENT_ORIGIN}/login?token=${token}&mode=verify`;
+  try {
+    await sendAuthEmail(normalizedEmail, '✅ Verifica tu cuenta en FilamentOS', emailVerifyHtml(user.name ?? '', link));
+  } catch (e) {
+    console.error('[RESEND-VERIFY]', e);
+  }
+  res.json({ ok: true });
+});
+
+// ── POST /api/auth/forgot-password ───────────────────────────────────────────
+app.post('/api/auth/forgot-password', async (req, res) => {
+  const { email } = req.body as { email?: string };
+  // Siempre 200 por seguridad (no revelar si existe)
+  if (!email) { res.json({ ok: true }); return; }
+  const normalizedEmail = email.trim().toLowerCase();
+  const user = db.prepare('SELECT * FROM users WHERE email=?').get(normalizedEmail) as (DbUser & { password_hash: string | null }) | undefined;
+
+  if (user && user.password_hash) {
+    // Invalidar tokens anteriores
+    db.prepare("UPDATE email_tokens SET used=1 WHERE user_id=? AND type='reset'").run(user.id);
+
+    const token = crypto.randomBytes(32).toString('hex');
+    db.prepare(
+      'INSERT INTO email_tokens (id, user_id, token, type, expires_at) VALUES (?, ?, ?, ?, ?)'
+    ).run(crypto.randomUUID(), user.id, token, 'reset', Date.now() + 60 * 60 * 1000); // 1 hora
+
+    const link = `${CLIENT_ORIGIN}/login?token=${token}&mode=reset`;
+    try {
+      await sendAuthEmail(normalizedEmail, '🔑 Restablecer contraseña — FilamentOS', emailResetHtml(link));
+    } catch (e) {
+      console.error('[FORGOT-PASSWORD]', e);
+    }
+  }
+  res.json({ ok: true });
+});
+
+// ── POST /api/auth/reset-password ─────────────────────────────────────────────
+app.post('/api/auth/reset-password', async (req, res) => {
+  const { token, password } = req.body as { token?: string; password?: string };
+  if (!token || !password) { res.status(400).json({ error: 'Token y contraseña requeridos' }); return; }
+  if (password.length < 6) { res.status(400).json({ error: 'La contraseña debe tener al menos 6 caracteres' }); return; }
+
+  const row = db.prepare(
+    "SELECT * FROM email_tokens WHERE token=? AND type='reset' AND used=0"
+  ).get(token) as { id: string; user_id: string; expires_at: number } | undefined;
+
+  if (!row) { res.status(400).json({ error: 'El enlace no es válido o ya fue usado.' }); return; }
+  if (row.expires_at < Date.now()) { res.status(400).json({ error: 'El enlace ha caducado. Solicita uno nuevo.' }); return; }
+
+  const newHash = bcrypt.hashSync(password, 10);
+  db.prepare('UPDATE users SET password_hash=?, email_verified=1 WHERE id=?').run(newHash, row.user_id);
+  db.prepare('UPDATE email_tokens SET used=1 WHERE id=?').run(row.id);
+
+  const user = db.prepare('SELECT * FROM users WHERE id=?').get(row.user_id) as DbUser;
+  req.login(user, (err) => {
+    if (err) { res.status(500).json({ error: 'Contraseña actualizada pero error al iniciar sesión.' }); return; }
+    res.json({ ok: true });
+  });
+});
+
 
 if (process.env.NODE_ENV !== 'test') {
   app.listen(PORT, () => {

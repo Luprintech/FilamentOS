@@ -1,5 +1,5 @@
 import React from 'react';
-import { Sun, Moon, Download, LogOut, FlaskConical, Info, Menu, X } from 'lucide-react';
+import { Sun, Moon, Download, LogOut, FlaskConical, Info, Menu, X, UserCircle2 } from 'lucide-react';
 import { Loader2 } from 'lucide-react';
 import { useTheme } from 'next-themes';
 import { useTranslation } from 'react-i18next';
@@ -9,6 +9,7 @@ import { Avatar, AvatarImage, AvatarFallback } from '@/components/ui/avatar';
 import { LanguageSelector } from '@/components/language-selector';
 import { CurrencySelector } from '@/components/currency-selector';
 import { AboutModal } from '@/components/about-modal';
+import { ProfileModal } from '@/components/profile-modal';
 import { useAuth } from '@/context/auth-context';
 import { usePwaInstall } from '@/hooks/use-pwa-install';
 
@@ -28,11 +29,12 @@ function ThemeToggle() {
 }
 
 export function AppHeader() {
-  const { user, logout, loginWithGoogle, isGuest, exitGuest } = useAuth();
+  const { user, logout, goToLogin, isGuest, exitGuest } = useAuth();
   const { t } = useTranslation();
   const { resolvedTheme } = useTheme();
   const { canInstall, install } = usePwaInstall();
   const [aboutOpen, setAboutOpen] = React.useState(false);
+  const [profileOpen, setProfileOpen] = React.useState(false);
   const [mobileMenuOpen, setMobileMenuOpen] = React.useState(false);
   const [isDevMode, setIsDevMode] = React.useState(false);
   const [devLoading, setDevLoading] = React.useState(false);
@@ -79,19 +81,27 @@ export function AppHeader() {
       <Button onClick={logout} variant="outline" size="icon" title={t('sign_out')}>
         <LogOut className="h-4 w-4" />
       </Button>
-      {avatarUrl && (
-        <Avatar className="h-8 w-8 hidden sm:flex">
-          <AvatarImage src={avatarUrl} alt={displayName} />
+      <button
+        type="button"
+        onClick={() => setProfileOpen(true)}
+        className="hidden sm:flex rounded-full ring-2 ring-transparent hover:ring-primary/50 transition-all focus-visible:outline-none focus-visible:ring-primary"
+        title="Mi perfil"
+        aria-label="Abrir perfil"
+      >
+        <Avatar className="h-8 w-8">
+          {avatarUrl
+            ? <AvatarImage src={avatarUrl} alt={displayName} />
+            : null}
           <AvatarFallback>{initials}</AvatarFallback>
         </Avatar>
-      )}
+      </button>
     </>
   ) : isGuest ? (
     <>
-      <Button onClick={loginWithGoogle} variant="outline" size="sm" className="hidden sm:inline-flex rounded-full font-bold">
+      <Button onClick={goToLogin} variant="outline" size="sm" className="hidden sm:inline-flex rounded-full font-bold">
         Iniciar sesión
       </Button>
-      <Button onClick={loginWithGoogle} variant="outline" size="icon" className="sm:hidden" title="Iniciar sesión">
+      <Button onClick={goToLogin} variant="outline" size="icon" className="sm:hidden" title="Iniciar sesión">
         <LogOut className="h-4 w-4" />
       </Button>
       <Button
@@ -105,10 +115,10 @@ export function AppHeader() {
     </>
   ) : (
     <>
-      <Button onClick={loginWithGoogle} variant="outline" size="sm" className="hidden sm:inline-flex">
+      <Button onClick={goToLogin} variant="outline" size="sm" className="hidden sm:inline-flex">
         {t('sign_in')}
       </Button>
-      <Button onClick={loginWithGoogle} variant="outline" size="icon" className="sm:hidden" title={t('sign_in')}>
+      <Button onClick={goToLogin} variant="outline" size="icon" className="sm:hidden" title={t('sign_in')}>
         <LogOut className="h-4 w-4" />
       </Button>
       {isDevMode && (
@@ -193,16 +203,29 @@ export function AppHeader() {
               </div>
               {user ? (
                 <div className="flex w-full flex-col items-center gap-3 rounded-2xl border border-border/60 bg-background/60 px-4 py-4">
-                  {avatarUrl && (
+                  <button
+                    type="button"
+                    onClick={() => { setProfileOpen(true); setMobileMenuOpen(false); }}
+                    className="rounded-full ring-2 ring-transparent hover:ring-primary/50 transition-all focus-visible:outline-none focus-visible:ring-primary"
+                    title="Mi perfil"
+                  >
                     <Avatar className="h-12 w-12">
-                      <AvatarImage src={avatarUrl} alt={displayName} />
+                      {avatarUrl ? <AvatarImage src={avatarUrl} alt={displayName} /> : null}
                       <AvatarFallback>{initials}</AvatarFallback>
                     </Avatar>
-                  )}
+                  </button>
                   <div className="min-w-0 w-full">
                     <p className="truncate text-sm font-bold text-foreground">{displayName}</p>
                     <p className="truncate text-xs text-muted-foreground">{t('welcome', { name: displayName })}</p>
                   </div>
+                  <Button
+                    onClick={() => { setProfileOpen(true); setMobileMenuOpen(false); }}
+                    variant="outline"
+                    className="w-full rounded-full font-bold"
+                  >
+                    <UserCircle2 className="mr-2 h-4 w-4" />
+                    Mi perfil
+                  </Button>
                   <Button onClick={logout} variant="outline" className="w-full rounded-full font-bold">
                     <LogOut className="mr-2 h-4 w-4" />
                     {t('sign_out')}
@@ -210,7 +233,7 @@ export function AppHeader() {
                 </div>
               ) : isGuest ? (
                 <div className="flex flex-col gap-2 w-full">
-                  <Button onClick={loginWithGoogle} variant="outline" className="w-full rounded-full font-bold">
+                  <Button onClick={goToLogin} variant="outline" className="w-full rounded-full font-bold">
                     {t('sign_in')}
                   </Button>
                   <Button
@@ -224,7 +247,7 @@ export function AppHeader() {
                 </div>
               ) : (
                 <div className="flex flex-col gap-2 w-full">
-                  <Button onClick={loginWithGoogle} variant="outline" className="w-full rounded-full font-bold">
+                  <Button onClick={goToLogin} variant="outline" className="w-full rounded-full font-bold">
                     {t('sign_in')}
                   </Button>
                   {isDevMode && (
@@ -252,6 +275,7 @@ export function AppHeader() {
       </motion.header>
 
       <AboutModal open={aboutOpen} onOpenChange={setAboutOpen} />
+      <ProfileModal open={profileOpen} onOpenChange={setProfileOpen} />
     </>
   );
 }

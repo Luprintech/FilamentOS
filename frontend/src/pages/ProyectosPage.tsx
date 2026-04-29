@@ -1,21 +1,22 @@
 import React, { useMemo, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { motion } from 'framer-motion';
 import {
   FolderOpen, Trash2, Clock, Weight, Wallet, ImageIcon, FileText,
-  LayoutGrid, List, Search, FolderPlus, ChevronLeft, ChevronRight,
+  LayoutGrid, List, Search, FolderPlus,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
-import { GridDensityControl, GRID_DENSITY_OPTIONS, type GridDensity } from '@/components/grid-density-control';
+import { PaginationBar } from '@/components/ui/pagination-bar';
+import { GridDensityControl, GRID_DENSITY_OPTIONS, getResponsiveGridStyle, type GridDensity } from '@/components/grid-density-control';
 import { Input } from '@/components/ui/input';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
+import { PageShell, PageHeader } from '@/components/page-shell';
 import { useAuth } from '@/context/auth-context';
 import { useProjects, useDeleteProject } from '@/features/projects/api/use-projects';
 import { getGuestProjects, deleteGuestProject, type SavedProject } from '@/features/projects/api/projects-api';
 import { buildProjectPdfData } from '@/features/calculator/lib/build-project-pdf-data';
 import { useTranslation } from 'react-i18next';
 import { cn } from '@/lib/utils';
-import { getGridActionMode, getGridColumnsVars, useGridPageSize } from '@/components/grid-density-control';
+import { getGridActionMode, useGridPageSize } from '@/components/grid-density-control';
 
 // ── Constants ──────────────────────────────────────────────────────────────────
 
@@ -243,14 +244,8 @@ function ProjectCard({ project, view, gridDensity, onLoad, onOpenPdf, onDelete }
   }
 
   const actions = (
-    <div className="flex flex-wrap items-center gap-2">
-      <ActionButton
-        icon={<FolderOpen className="h-4 w-4" />}
-        label="Editar proyecto"
-        shortLabel="Editar"
-        onClick={() => onLoad(project)}
-        primary
-      />
+    // stopPropagation: evita que los botones de acción propaguen el click del card
+    <div className="flex flex-wrap items-center gap-2" onClick={(e) => e.stopPropagation()}>
       <ActionButton
         icon={<FileText className="h-4 w-4" />}
         label="Customizar PDF"
@@ -269,7 +264,10 @@ function ProjectCard({ project, view, gridDensity, onLoad, onOpenPdf, onDelete }
 
   if (view === 'list') {
     return (
-      <div className="group flex items-center gap-4 rounded-[18px] border border-border/60 bg-card/50 p-4 transition-shadow hover:shadow-[0_4px_20px_rgba(0,0,0,0.10)]">
+      <div
+        className="group flex cursor-pointer items-center gap-4 rounded-[18px] border border-border/60 bg-card/50 p-4 transition-shadow hover:shadow-[0_4px_20px_rgba(0,0,0,0.10)]"
+        onClick={() => onLoad(project)}
+      >
         {/* Thumbnail */}
         <div className="relative h-16 w-16 shrink-0 overflow-hidden rounded-xl bg-muted/40">
           {project.projectImage
@@ -303,7 +301,10 @@ function ProjectCard({ project, view, gridDensity, onLoad, onOpenPdf, onDelete }
 
   // Grid card
   return (
-    <div className="group flex h-full min-h-[360px] flex-col rounded-[24px] border border-border/60 bg-card/50 transition-shadow hover:shadow-[0_8px_32px_rgba(0,0,0,0.12)]">
+    <div
+      className="group flex h-full min-h-[360px] cursor-pointer flex-col rounded-[24px] border border-border/60 bg-card/50 transition-shadow hover:shadow-[0_8px_32px_rgba(0,0,0,0.12)]"
+      onClick={() => onLoad(project)}
+    >
       {/* Cover */}
       <div className="relative h-40 overflow-hidden rounded-t-[22px] bg-muted/30">
         {project.projectImage
@@ -428,37 +429,22 @@ export function ProyectosPage() {
   }, [viewMode]);
 
   return (
-    <motion.div
-      ref={gridRef}
-      initial={{ opacity: 0, y: 8 }}
-      animate={{ opacity: 1, y: 0 }}
-      transition={{ duration: 0.35 }}
-      className="w-full space-y-6"
-    >
-      {/* ── Page header ── */}
-      <div className="rounded-[28px] border border-border/70 bg-card/60 p-5 backdrop-blur-md shadow-[0_12px_36px_rgba(2,8,23,0.08)] dark:border-white/10 sm:p-7">
-        <div className="flex flex-wrap items-start justify-between gap-4">
-          <div>
-            <div className="mb-2 inline-flex items-center gap-2 rounded-full border border-border/60 bg-background/70 px-3 py-1.5 text-xs font-bold text-[hsl(var(--challenge-blue))] dark:border-white/[0.08] dark:bg-white/[0.04]">
-              <FolderOpen className="h-3.5 w-3.5" />
-              {t('proj_badge') ?? 'Calculadora'}
-            </div>
-            <h2 className="challenge-gradient-text text-3xl font-black leading-none sm:text-4xl">
-              {t('proj_title') ?? 'Proyectos guardados'}
-            </h2>
-            <p className="mt-2 text-sm text-muted-foreground">
-              {t('proj_subtitle') ?? 'Historial de cálculos guardados. Carga uno para retomar donde lo dejaste.'}
-            </p>
-          </div>
+    <PageShell innerRef={gridRef}>
+      <PageHeader
+        icon={<FolderOpen />}
+        badge={t('proj_badge') ?? 'Calculadora'}
+        title={t('proj_title') ?? 'Proyectos guardados'}
+        subtitle={t('proj_subtitle') ?? 'Historial de cálculos guardados. Carga uno para retomar donde lo dejaste.'}
+        actions={
           <Button
-            className="shrink-0 rounded-full font-extrabold"
+            className="rounded-full font-extrabold"
             onClick={() => navigate('/calculadora')}
           >
             <FolderPlus className="mr-2 h-4 w-4" />
             {t('proj_back_to_calculator') ?? 'Volver a la calculadora'}
           </Button>
-        </div>
-      </div>
+        }
+      />
 
       {/* ── Controls ── */}
       {(showSkeletons || allProjects.length > 0) && (
@@ -510,9 +496,9 @@ export function ProyectosPage() {
       {/* ── Content ── */}
       {showSkeletons ? (
         <div className={viewMode === 'grid'
-          ? 'grid grid-cols-1 gap-5 transition-all duration-300 sm:grid-cols-2 xl:[grid-template-columns:repeat(auto-fill,minmax(var(--grid-min-width),1fr))]'
+          ? 'grid gap-5 transition-all duration-300'
           : 'flex flex-col gap-3'
-        } style={viewMode === 'grid' ? getGridColumnsVars(gridDensity) : undefined}>
+        } style={viewMode === 'grid' ? getResponsiveGridStyle(gridDensity) : undefined}>
           {[...Array(6)].map((_, i) => <CardSkeleton key={i} view={viewMode} />)}
         </div>
       ) : allProjects.length === 0 ? (
@@ -524,9 +510,9 @@ export function ProyectosPage() {
       ) : (
         <>
           <div className={viewMode === 'grid'
-            ? 'grid grid-cols-1 gap-5 transition-all duration-300 sm:grid-cols-2 xl:[grid-template-columns:repeat(auto-fill,minmax(var(--grid-min-width),1fr))]'
+            ? 'grid gap-5 transition-all duration-300'
             : 'flex flex-col gap-3'
-          } style={viewMode === 'grid' ? getGridColumnsVars(gridDensity) : undefined}>
+          } style={viewMode === 'grid' ? getResponsiveGridStyle(gridDensity) : undefined}>
             {paginated.map((project) => (
               <ProjectCard
                 key={project.id}
@@ -541,34 +527,15 @@ export function ProyectosPage() {
           </div>
 
           {/* ── Pagination ── */}
-          {totalPages > 1 && (
-            <div className="flex items-center justify-between gap-3 rounded-[18px] border border-border/50 bg-card/30 px-4 py-3">
-              <span className="text-xs font-bold text-muted-foreground">
-                {t('pm_page', { current: safePage, total: totalPages })}
-                {' · '}
-                {filtered.length} {t('proj_count') ?? 'proyectos'}
-              </span>
-              <div className="flex gap-1.5">
-                <Button variant="outline" size="icon" className="h-8 w-8 rounded-full"
-                  onClick={() => setPage((p) => Math.max(1, p - 1))} disabled={safePage === 1}>
-                  <ChevronLeft className="h-4 w-4" />
-                </Button>
-                {Array.from({ length: totalPages }, (_, i) => i + 1).map((n) => (
-                  <Button key={n} variant={n === safePage ? 'default' : 'outline'} size="icon"
-                    className="h-8 w-8 rounded-full text-xs font-bold"
-                    onClick={() => setPage(n)}>
-                    {n}
-                  </Button>
-                ))}
-                <Button variant="outline" size="icon" className="h-8 w-8 rounded-full"
-                  onClick={() => setPage((p) => Math.min(totalPages, p + 1))} disabled={safePage === totalPages}>
-                  <ChevronRight className="h-4 w-4" />
-                </Button>
-              </div>
-            </div>
-          )}
+          <PaginationBar
+            page={safePage}
+            totalPages={totalPages}
+            totalItems={filtered.length}
+            itemLabel={t('proj_count') ?? 'proyectos'}
+            onChange={setPage}
+          />
         </>
       )}
-    </motion.div>
+    </PageShell>
   );
 }

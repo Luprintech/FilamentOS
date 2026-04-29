@@ -88,6 +88,8 @@ export interface FilamentPiece {
   plate_count: number;
   /** Link to the 3MF or STL file (optional) */
   file_link: string | null;
+  /** Si true, la pieza está desactivada y no cuenta en los totales del proyecto */
+  disabled?: boolean;
 }
 
 // ── Stats ────────────────────────────────────────────────────────────────────────
