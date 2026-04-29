@@ -1,5 +1,5 @@
 import { describe, it, expect, vi } from 'vitest';
-import { render, screen, fireEvent, waitFor } from '@testing-library/react';
+import { render, screen } from '@testing-library/react';
 import type { ComponentProps, ReactNode } from 'react';
 import type { Spool } from '../types';
 
@@ -83,7 +83,6 @@ function createSpool(overrides: Partial<Spool> = {}): Spool {
     price: overrides.price ?? 24,
     notes: overrides.notes ?? '',
     shopUrl: overrides.shopUrl ?? null,
-    spoolmanId: overrides.spoolmanId ?? null,
     inventorySource: overrides.inventorySource ?? 'local',
     linkedAt: overrides.linkedAt ?? null,
     lastSyncedAt: overrides.lastSyncedAt ?? null,
@@ -123,5 +122,10 @@ describe('SpoolForm', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Guardar cambios' }));
 
     await waitFor(() => expect(onSubmit).toHaveBeenCalled());
+  });
+
+  it('renderiza el formulario con la bobina a editar', () => {
+    renderForm();
+    expect(screen.getByDisplayValue('Local spool')).toBeInTheDocument();
   });
 });

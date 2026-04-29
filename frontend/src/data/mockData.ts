@@ -232,7 +232,7 @@ export const mockSpools: Spool[] = [
     price: 24.0,
     notes: '',
     shopUrl: 'https://eu.store.bambulab.com/es/products/pla-basic-filament',
-    spoolmanId: null,
+
     inventorySource: 'local',
     linkedAt: null,
     lastSyncedAt: null,
@@ -251,7 +251,7 @@ export const mockSpools: Spool[] = [
     price: 28.0,
     notes: '',
     shopUrl: null,
-    spoolmanId: null,
+
     inventorySource: 'local',
     linkedAt: null,
     lastSyncedAt: null,
@@ -270,7 +270,7 @@ export const mockSpools: Spool[] = [
     price: 24.0,
     notes: '',
     shopUrl: null,
-    spoolmanId: null,
+
     inventorySource: 'local',
     linkedAt: null,
     lastSyncedAt: null,
@@ -289,7 +289,7 @@ export const mockSpools: Spool[] = [
     price: 22.0,
     notes: '',
     shopUrl: null,
-    spoolmanId: null,
+
     inventorySource: 'local',
     linkedAt: null,
     lastSyncedAt: null,
@@ -308,7 +308,7 @@ export const mockSpools: Spool[] = [
     price: 26.0,
     notes: '',
     shopUrl: null,
-    spoolmanId: null,
+
     inventorySource: 'local',
     linkedAt: null,
     lastSyncedAt: null,
@@ -327,7 +327,7 @@ export const mockSpools: Spool[] = [
     price: 22.0,
     notes: '',
     shopUrl: null,
-    spoolmanId: null,
+
     inventorySource: 'local',
     linkedAt: null,
     lastSyncedAt: null,

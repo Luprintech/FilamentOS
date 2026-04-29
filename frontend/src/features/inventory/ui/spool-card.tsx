@@ -64,6 +64,7 @@ export function SpoolCard({ spool, onEdit, onDelete, onDeduct, onFinish, guestMo
   const lowStock = isLowStock(spool);
   const finished = spool.status === 'finished';
 
+
   const guestTooltip = 'Inicia sesión para gestionar tu inventario';
 
   function guestBtn(handler: () => void, children: React.ReactNode, extraClass = '') {

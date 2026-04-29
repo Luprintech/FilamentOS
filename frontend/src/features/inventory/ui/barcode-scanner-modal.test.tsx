@@ -1,4 +1,4 @@
-import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
+import { describe, it, expect, vi } from 'vitest';
 import { render, screen, fireEvent, waitFor } from '@testing-library/react';
 
 vi.mock('react-i18next', () => ({
@@ -133,7 +133,6 @@ describe('BarcodeScannerModal Spoolman lookup UX', () => {
     expect(screen.getByText('Código comercial sin vínculo en tu inventario.')).toBeInTheDocument();
     expect(screen.queryByText('Spoolman')).not.toBeInTheDocument();
   });
-
   it('muestra un error de cámara cuando el contexto no es seguro', async () => {
     Object.defineProperty(window, 'isSecureContext', { value: false, configurable: true });
 
@@ -156,52 +155,6 @@ describe('BarcodeScannerModal Spoolman lookup UX', () => {
 
     await waitFor(() => {
       expect(screen.getByText('Error al buscar el filamento.')).toBeInTheDocument();
-    });
-  });
-
-  it('rellena el formulario con los datos detectados por Spoolman', async () => {
-    const onFill = vi.fn();
-    vi.stubGlobal('fetch', vi.fn().mockResolvedValue({
-      ok: true,
-      json: async () => ({
-        found: true,
-        source: 'spoolman',
-        linked: true,
-        data: {
-          brand: 'Polymaker',
-          name: 'PolyLite PLA Pro',
-          material: 'PLA',
-          color: 'Orange',
-          colorHex: '#ff8800',
-          weightGrams: 1000,
-          diameter: null,
-          printTempMin: null,
-          printTempMax: null,
-          bedTempMin: null,
-          bedTempMax: null,
-          price: 31,
-        },
-      }),
-    }));
-
-    render(<BarcodeScannerModal open onClose={vi.fn()} onFill={onFill} />);
-
-    fireEvent.click(screen.getByRole('button', { name: 'Activar cámara' }));
-    await waitFor(() => expect(screen.getByRole('button', { name: 'Rellenar formulario' })).toBeInTheDocument());
-
-    fireEvent.click(screen.getByRole('button', { name: 'Rellenar formulario' }));
-
-    expect(onFill).toHaveBeenCalledWith({
-      brand: 'Polymaker',
-      material: 'PLA',
-      color: 'Orange',
-      colorHex: '#ff8800',
-      totalGrams: 1000,
-      remainingG: 1000,
-      price: 31,
-      notes: 'PolyLite PLA Pro',
-      rawCode: 'mock-scanned-code',
-      source: 'spoolman',
     });
   });
 
@@ -228,41 +181,6 @@ describe('BarcodeScannerModal Spoolman lookup UX', () => {
     fireEvent.pointerDown(document.body);
 
     expect(onClose).toHaveBeenCalled();
-  });
-
-  it('reinicia un nuevo escaneo desde el resultado y vuelve a consultar el código', async () => {
-    vi.stubGlobal('fetch', vi.fn().mockResolvedValue({
-      ok: true,
-      json: async () => ({
-        found: true,
-        source: 'spoolman',
-        linked: true,
-        data: {
-          brand: 'Polymaker',
-          name: 'PolyLite PLA Pro',
-          material: 'PLA',
-          color: 'Orange',
-          colorHex: '#ff8800',
-          weightGrams: 1000,
-          diameter: null,
-          printTempMin: null,
-          printTempMax: null,
-          bedTempMin: null,
-          bedTempMax: null,
-          price: 31,
-        },
-      }),
-    }));
-
-    render(<BarcodeScannerModal open onClose={vi.fn()} onFill={vi.fn()} />);
-
-    fireEvent.click(screen.getByRole('button', { name: 'Activar cámara' }));
-    await screen.findByRole('button', { name: 'Rellenar formulario' });
-
-    fireEvent.click(screen.getAllByRole('button', { name: 'Activar cámara' })[0]);
-
-    await waitFor(() => expect(scannerStart).toHaveBeenCalledTimes(2));
-    await waitFor(() => expect(fetch).toHaveBeenCalledTimes(2));
   });
 
   it('usa valores por defecto al rellenar cuando el lookup manual no trae metadata', async () => {

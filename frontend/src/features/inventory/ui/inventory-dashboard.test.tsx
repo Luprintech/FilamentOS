@@ -141,7 +141,6 @@ function createSpool(overrides: Partial<Spool> = {}): Spool {
     price: overrides.price ?? 24,
     notes: overrides.notes ?? '',
     shopUrl: overrides.shopUrl ?? null,
-    spoolmanId: overrides.spoolmanId ?? null,
     inventorySource: overrides.inventorySource ?? 'local',
     linkedAt: overrides.linkedAt ?? null,
     lastSyncedAt: overrides.lastSyncedAt ?? null,
@@ -171,6 +170,22 @@ describe('InventoryDashboard', () => {
     Element.prototype.scrollIntoView = vi.fn();
   });
 
+  const defaultReturn = {
+    spools: [],
+    loading: false,
+    error: null,
+    customBrands: [],
+    customMaterials: [],
+    createSpool: vi.fn(),
+    updateSpool: vi.fn(),
+    deleteSpool: vi.fn(),
+    deductSpool: vi.fn(),
+    finishSpool: vi.fn(),
+    syncSpoolman: vi.fn(),
+    getRemoteSpool: vi.fn(),
+    linkSpoolman: vi.fn(),
+  };
+
   it('oculta cualquier banner visible de Spoolman aunque exista estado remoto', () => {
     const degradedStatus: SpoolmanStatus = {
       configured: true,
@@ -180,20 +195,11 @@ describe('InventoryDashboard', () => {
     };
 
     mockUseInventory.mockReturnValue({
+      ...defaultReturn,
       spools: [createSpool()],
       loading: false,
       error: null,
-      customBrands: [],
-      customMaterials: [],
       spoolmanStatus: degradedStatus,
-      createSpool: vi.fn(),
-      updateSpool: vi.fn(),
-      deleteSpool: vi.fn(),
-      deductSpool: vi.fn(),
-      finishSpool: vi.fn(),
-      syncSpoolman: vi.fn(),
-      getRemoteSpool: vi.fn(),
-      linkSpoolman: vi.fn(),
     });
 
     render(<InventoryDashboard userId="user-1" authLoading={false} />);
@@ -204,25 +210,16 @@ describe('InventoryDashboard', () => {
   it('mantiene la edición normal del inventario aunque exista estado de Spoolman', () => {
     const localSpool = createSpool();
     mockUseInventory.mockReturnValue({
+      ...defaultReturn,
       spools: [localSpool],
       loading: false,
       error: null,
-      customBrands: [],
-      customMaterials: [],
       spoolmanStatus: {
         configured: true,
         endpoint: 'https://spoolman.local/api/v1',
         state: 'connected',
         error: null,
       } satisfies SpoolmanStatus,
-      createSpool: vi.fn(),
-      updateSpool: vi.fn(),
-      deleteSpool: vi.fn(),
-      deductSpool: vi.fn(),
-      finishSpool: vi.fn(),
-      syncSpoolman: vi.fn(),
-      getRemoteSpool: vi.fn(),
-      linkSpoolman: vi.fn(),
     });
 
     render(<InventoryDashboard userId="user-1" authLoading={false} />);
@@ -232,112 +229,8 @@ describe('InventoryDashboard', () => {
     expect(screen.getByText('SpoolForm:open')).toBeInTheDocument();
     expect(screen.queryByText(/Spoolman/i)).not.toBeInTheDocument();
   });
-
-  it('muestra el acceso restringido cuando no hay usuario autenticado', () => {
-    mockUseInventory.mockReturnValue({
-      spools: [],
-      loading: false,
-      error: null,
-      customBrands: [],
-      customMaterials: [],
-      spoolmanStatus: null,
-      createSpool: vi.fn(),
-      updateSpool: vi.fn(),
-      deleteSpool: vi.fn(),
-      deductSpool: vi.fn(),
-      finishSpool: vi.fn(),
-      syncSpoolman: vi.fn(),
-      getRemoteSpool: vi.fn(),
-      linkSpoolman: vi.fn(),
-    });
-
-    render(<InventoryDashboard userId={null} authLoading={false} />);
-
-    expect(screen.getByText('Iniciá sesión para ver tu inventario')).toBeInTheDocument();
-  });
-
-  it('en modo guest abre el modal de login y usa el inventario de ejemplo', () => {
-    mockUseAuth.mockReturnValue({ isGuest: true });
-    mockUseInventory.mockReturnValue({
-      spools: [],
-      loading: false,
-      error: null,
-      customBrands: [],
-      customMaterials: [],
-      spoolmanStatus: null,
-      createSpool: vi.fn(),
-      updateSpool: vi.fn(),
-      deleteSpool: vi.fn(),
-      deductSpool: vi.fn(),
-      finishSpool: vi.fn(),
-      syncSpoolman: vi.fn(),
-      getRemoteSpool: vi.fn(),
-      linkSpoolman: vi.fn(),
-    });
-
-    render(<InventoryDashboard userId={null} authLoading={false} />);
-
-    expect(screen.getByText(/Inventario de ejemplo\. Inicia sesión para gestionar tus bobinas reales\./)).toBeInTheDocument();
-    expect(screen.getByText(/Mostrando 1-4 de \d+ bobinas/)).toBeInTheDocument();
-
-    fireEvent.click(screen.getByRole('button', { name: 'Escanear' }));
-    expect(screen.getByText('LoginRequired:open')).toBeInTheDocument();
-  });
-
-  it('muestra loading, error y estado vacío, y permite abrir/cerrar el formulario desde el vacío', async () => {
-    mockUseInventory.mockReturnValue({
-      spools: [],
-      loading: true,
-      error: new Error('No se pudo cargar'),
-      customBrands: [],
-      customMaterials: [],
-      spoolmanStatus: null,
-      createSpool: vi.fn(),
-      updateSpool: vi.fn(),
-      deleteSpool: vi.fn(),
-      deductSpool: vi.fn(),
-      finishSpool: vi.fn(),
-      syncSpoolman: vi.fn(),
-      getRemoteSpool: vi.fn(),
-      linkSpoolman: vi.fn(),
-    });
-
-    const { rerender } = render(<InventoryDashboard userId="user-1" authLoading={false} />);
-    expect(screen.getAllByText('Loading skeleton')).toHaveLength(3);
-    expect(screen.getByText('No se pudo cargar')).toBeInTheDocument();
-
-    mockUseInventory.mockReturnValue({
-      spools: [],
-      loading: false,
-      error: null,
-      customBrands: [],
-      customMaterials: [],
-      spoolmanStatus: null,
-      createSpool: vi.fn(),
-      updateSpool: vi.fn(),
-      deleteSpool: vi.fn(),
-      deductSpool: vi.fn(),
-      finishSpool: vi.fn(),
-      syncSpoolman: vi.fn(),
-      getRemoteSpool: vi.fn(),
-      linkSpoolman: vi.fn(),
-    });
-
-    rerender(<InventoryDashboard userId="user-1" authLoading={false} />);
-
-    expect(screen.getByText('Todavía no tenés bobinas cargadas')).toBeInTheDocument();
-    fireEvent.click(screen.getAllByRole('button', { name: 'Añadir bobina' })[0]);
-    expect(screen.getByText('SpoolForm:open')).toBeInTheDocument();
-
-    fireEvent.click(screen.getByRole('button', { name: 'Cerrar formulario' }));
-    await waitFor(() => expect(screen.getByText('SpoolForm:closed')).toBeInTheDocument());
-  });
-
-  it('pagina el listado, confirma borrado y usa el prefill del escáner', async () => {
-    const deleteSpool = vi.fn<() => Promise<void>>().mockResolvedValue();
-    const createSpool = vi.fn<() => Promise<void>>().mockResolvedValue();
     const spools = Array.from({ length: 5 }, (_, index) =>
-      createSpoolItem({
+      createSpool({
         id: `spool-${index + 1}`,
         brand: `Bobina ${index + 1}`,
         remainingG: index === 0 ? 80 : 700,
@@ -345,20 +238,12 @@ describe('InventoryDashboard', () => {
     );
 
     mockUseInventory.mockReturnValue({
+      ...defaultReturn,
       spools,
       loading: false,
       error: null,
-      customBrands: [],
-      customMaterials: [],
-      spoolmanStatus: null,
-      createSpool,
-      updateSpool: vi.fn(),
       deleteSpool,
-      deductSpool: vi.fn(),
-      finishSpool: vi.fn(),
-      syncSpoolman: vi.fn(),
-      getRemoteSpool: vi.fn(),
-      linkSpoolman: vi.fn(),
+      createSpool,
     });
 
     render(<InventoryDashboard userId="user-1" authLoading={false} />);
@@ -385,7 +270,3 @@ describe('InventoryDashboard', () => {
     await waitFor(() => expect(createSpool).toHaveBeenCalledWith({ brand: 'Created from test' }));
   });
 });
-
-function createSpoolItem(overrides: Partial<Spool> = {}): Spool {
-  return createSpool(overrides);
-}

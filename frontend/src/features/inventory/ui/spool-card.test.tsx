@@ -12,6 +12,7 @@ vi.mock('react-i18next', () => ({
         'inventory.totalGrams': 'Total',
         'inventory.price': 'Precio',
         'inventory.buyLink': 'Comprar',
+        'inventory.source.local': 'Local',
       };
       return translations[key] ?? key;
     },
@@ -32,7 +33,6 @@ function createSpool(overrides: Partial<Spool> = {}): Spool {
     price: overrides.price ?? 20,
     notes: overrides.notes ?? '',
     shopUrl: overrides.shopUrl ?? null,
-    spoolmanId: overrides.spoolmanId ?? null,
     inventorySource: overrides.inventorySource ?? 'local',
     linkedAt: overrides.linkedAt ?? null,
     lastSyncedAt: overrides.lastSyncedAt ?? null,
@@ -139,7 +139,7 @@ describe('SpoolCard', () => {
 
     render(
       <SpoolCard
-        spool={createSpool({ status: 'finished', inventorySource: 'spoolman', remainingG: 0 })}
+        spool={createSpool({ status: 'finished', remainingG: 0 })}
         onEdit={onEdit}
         onDelete={onDelete}
         onDeduct={vi.fn()}

@@ -29,7 +29,7 @@ interface FilamentData {
   price: number | null;
 }
 
-type LookupSource = 'bambu' | 'opendb' | 'manual' | 'spoolman';
+type LookupSource = 'bambu' | 'opendb' | 'manual';
 
 interface LookupResult {
   found: boolean;
