@@ -1,4 +1,4 @@
-import { useRef, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Download, ChevronDown, Loader2, Check, Table2 } from 'lucide-react';
 import * as XLSX from 'xlsx';
@@ -228,7 +228,7 @@ export function StatsExportButtons({ data, filters }: StatsExportButtonsProps) {
 
   function closeMenu() { setOpen(false); }
 
-  React.useEffect(() => {
+  useEffect(() => {
     if (!open || !menuRef.current) return;
     const rect = menuRef.current.getBoundingClientRect();
     setMenuPosition({

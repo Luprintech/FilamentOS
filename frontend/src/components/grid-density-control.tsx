@@ -39,7 +39,7 @@ export function getGridColumnsVars(density: GridDensity): React.CSSProperties {
 
 export function getResponsiveGridStyle(density: GridDensity): React.CSSProperties {
   return {
-    gridTemplateColumns: `repeat(auto-fit, minmax(min(100%, ${GRID_MIN_CARD_WIDTH[density]}), 1fr))`,
+    gridTemplateColumns: `repeat(auto-fill, minmax(min(100%, ${GRID_MIN_CARD_WIDTH[density]}), 1fr))`,
   };
 }
 
