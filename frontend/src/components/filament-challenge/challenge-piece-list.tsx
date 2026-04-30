@@ -4,7 +4,7 @@ import {
   GridDensityControl,
   GRID_DENSITY_OPTIONS,
   getGridActionMode,
-  getGridColumnsVars,
+  getResponsiveGridStyle,
   useGridPageSize,
   type GridActionMode,
   type GridDensity,
@@ -132,7 +132,10 @@ function ActionBtn({
       size="sm"
       variant="outline"
       disabled={disabled}
-      onClick={onClick}
+      onClick={(e) => {
+        e.stopPropagation();
+        onClick();
+      }}
       className={cn(
         'rounded-full font-bold',
         compact ? 'h-8 w-8 p-0' : 'h-8 px-3 text-[0.7rem]',
@@ -305,6 +308,7 @@ export function ChallengePieceList({
               href={href}
               target="_blank"
               rel="noopener noreferrer"
+              onClick={(e) => e.stopPropagation()}
               aria-label={t('tracker.fileLink.open')}
               className="inline-flex items-center gap-1 rounded-full border border-primary/20 bg-primary/10 px-2 py-0.5 text-[0.65rem] font-semibold text-primary transition-colors hover:bg-primary/15"
             >
@@ -433,13 +437,14 @@ export function ChallengePieceList({
       ) : isGrid ? (
         /* ── Grid view ──────────────────────────────────────────────────── */
         <div
-          className="grid grid-cols-1 gap-4 transition-all duration-300 md:grid-cols-2 xl:[grid-template-columns:repeat(auto-fill,minmax(var(--grid-min-width),1fr))]"
-          style={getGridColumnsVars(gridDensity)}
+          className="grid gap-4 transition-all duration-300"
+          style={getResponsiveGridStyle(gridDensity)}
         >
           {paginated.map((piece) => (
             <article
               key={piece.id}
               {...dragProps(piece.id)}
+              onClick={() => onEdit(piece.id)}
               className={`group flex h-full min-h-[360px] flex-col overflow-hidden rounded-[18px] border transition-all ${editingClass(piece.id)} ${dragRing(piece.id)} ${piece.disabled ? 'opacity-50' : ''}`}
             >
               {/* Image */}
@@ -453,6 +458,7 @@ export function ChallengePieceList({
                 <button
                   type="button"
                   draggable
+                  onClick={(e) => e.stopPropagation()}
                   onDragStart={() => handleDragStart(piece.id)}
                   onDragEnd={handleDragEnd}
                   onTouchStart={() => handleTouchStart(piece.id)}
