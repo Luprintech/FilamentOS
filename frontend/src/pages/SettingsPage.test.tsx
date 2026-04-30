@@ -1,6 +1,19 @@
 import { describe, expect, it, vi } from 'vitest';
+import React from 'react';
 
-// Mock everything BEFORE importing the component
+// Stable references to avoid infinite re-render loops
+const STABLE_PREFS = Object.freeze({ dateFormat: 'dd-mm-yyyy', lengthUnit: 'mm', weightUnit: 'g' });
+const HOOK_RESULT = Object.freeze({
+  preferences: STABLE_PREFS,
+  loadingPrefs: false,
+  updatePreferences: vi.fn(),
+  savingPrefs: false,
+});
+
+vi.mock('@/hooks/use-preferences', () => ({
+  usePreferences: () => HOOK_RESULT,
+}));
+
 vi.mock('react-i18next', () => ({
   useTranslation: () => ({
     t: (key: string) => key,
@@ -27,34 +40,24 @@ vi.mock('@/context/currency-context', () => ({
   CURRENCIES: [{ code: 'USD', symbol: '$', name: 'US Dollar' }],
 }));
 
-vi.mock('@/hooks/use-preferences', () => ({
-  usePreferences: () => ({
-    preferences: { dateFormat: 'dd-mm-yyyy', lengthUnit: 'mm', weightUnit: 'g' },
-    loadingPrefs: false,
-    updatePreferences: vi.fn(),
-    savingPrefs: false,
-  }),
+vi.mock('react-circle-flags', () => ({
+  CircleFlag: (p: { countryCode: string }) =>
+    React.createElement('span', { 'data-testid': `flag-${p.countryCode}` }, p.countryCode),
 }));
 
-import { render } from '@testing-library/react';
-import React from 'react';
+import { render, screen } from '@testing-library/react';
 import { SettingsPage } from './SettingsPage';
 
-describe('SettingsPage', () => {
-  it('renders without hanging', () => {
-    const mockFetch = vi.fn().mockResolvedValue({
-      ok: true,
-      json: async () => ({
-        id: '1', name: 'Test', email: 'test@test.com', photo: null,
-        hasPassword: true, isGoogleAccount: false,
-        stats: { projects: 0, pieces: 0, spools: 0 },
-      }),
-    });
-    vi.stubGlobal('fetch', mockFetch);
+test('renders without infinite loop', () => {
+  let resolve!: (v: unknown) => void;
+  vi.stubGlobal('fetch', vi.fn(() => new Promise((r) => { resolve = r; })));
 
-    render(<SettingsPage />);
-    // The combobox should exist
-    const combobox = document.querySelector('[role="combobox"]');
-    expect(combobox).not.toBeNull();
-  }, 5000);
-});
+  render(<SettingsPage />);
+  expect(screen.getByText('Mi cuenta')).toBeInTheDocument();
+  
+  resolve(new Response(JSON.stringify({
+    id: '1', name: 'Test', email: 't@t.com', photo: null,
+    hasPassword: true, isGoogleAccount: false,
+    stats: { projects: 0, pieces: 0, spools: 0 },
+  }), { status: 200 }));
+}, 5000);

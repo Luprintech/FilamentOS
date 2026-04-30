@@ -173,81 +173,90 @@ export function AppHeader() {
         </div>
 
         {/* Mobile menu */}
-        {mobileMenuOpen && (
-          <div className="mt-4 border-t border-border/60 pt-4 md:hidden">
-            <div className="mx-auto flex max-w-sm flex-col items-center gap-4 text-center">
-              <div className="grid w-full grid-cols-3 place-items-center gap-3">
-                <div className="flex w-full justify-center"><ThemeToggle /></div>
-                <div className="flex w-full justify-center"><LanguageSelector /></div>
-                <div className="flex w-full justify-center"><CurrencySelector /></div>
-              </div>
-              {canInstall && (
-                <Button variant="outline" onClick={install} className="w-full rounded-full font-bold">
-                  <Download className="mr-2 h-4 w-4" />
-                  {t('install_title')}
-                </Button>
-              )}
-              {user ? (
-                <div className="flex w-full flex-col items-center gap-3 rounded-2xl border border-border/60 bg-background/60 px-4 py-4">
-                  <button
-                    type="button"
-                    onClick={() => { navigate('/ajustes'); setMobileMenuOpen(false); }}
-                    className="rounded-full ring-2 ring-transparent hover:ring-primary/50 transition-all focus-visible:outline-none focus-visible:ring-primary"
-                    title="Mi perfil"
-                  >
-                    <Avatar className="h-12 w-12">
-                      {avatarUrl ? <AvatarImage src={avatarUrl} alt={displayName} /> : null}
-                      <AvatarFallback>{initials}</AvatarFallback>
-                    </Avatar>
-                  </button>
-                  <div className="min-w-0 w-full">
-                    <p className="truncate text-sm font-bold text-foreground">{displayName}</p>
-                    <p className="truncate text-xs text-muted-foreground">{t('welcome', { name: displayName })}</p>
-                  </div>
-                  <Button
-                    onClick={() => { navigate('/ajustes'); setMobileMenuOpen(false); }}
-                    variant="outline"
-                    className="w-full rounded-full font-bold"
-                  >
-                    <UserCircle2 className="mr-2 h-4 w-4" />
-                    Mi perfil
-                  </Button>
+        <AnimatePresence>
+          {mobileMenuOpen && (
+            <motion.div
+              key="mobile-menu"
+              initial={{ opacity: 0, height: 0 }}
+              animate={{ opacity: 1, height: 'auto' }}
+              exit={{ opacity: 0, height: 0 }}
+              transition={{ duration: 0.25, ease: 'easeInOut' }}
+              className="mt-4 border-t border-border/60 pt-4 md:hidden"
+            >
+              <div className="mx-auto flex max-w-sm flex-col items-center gap-4 text-center">
+                <div className="grid w-full grid-cols-3 place-items-center gap-3">
+                  <div className="flex w-full justify-center"><ThemeToggle /></div>
+                  <div className="flex w-full justify-center"><LanguageSelector /></div>
+                  <div className="flex w-full justify-center"><CurrencySelector /></div>
                 </div>
-              ) : isGuest ? (
-                <div className="flex flex-col gap-2 w-full">
-                  <Button onClick={goToLogin} variant="outline" className="w-full rounded-full font-bold">
-                    {t('sign_in')}
+                {canInstall && (
+                  <Button variant="outline" onClick={install} className="w-full rounded-full font-bold">
+                    <Download className="mr-2 h-4 w-4" />
+                    {t('install_title')}
                   </Button>
-                  <Button
-                    onClick={() => { void exitGuest().then(() => { window.location.href = '/'; }); }}
-                    variant="ghost"
-                    className="w-full rounded-full font-bold"
-                  >
-                    <LogOut className="mr-2 h-4 w-4" />
-                    Salir del modo invitado
-                  </Button>
-                </div>
-              ) : (
-                <div className="flex flex-col gap-2 w-full">
-                  <Button onClick={goToLogin} variant="outline" className="w-full rounded-full font-bold">
-                    {t('sign_in')}
-                  </Button>
-                  {isDevMode && (
-                    <Button
-                      onClick={handleDevLogin}
-                      disabled={devLoading}
-                      variant="outline"
-                      className="w-full rounded-full border-dashed border-yellow-500/60 font-bold text-yellow-500 hover:bg-yellow-500/10"
+                )}
+                {user ? (
+                  <div className="flex w-full flex-col items-center gap-3 rounded-2xl border border-border/60 bg-background/60 px-4 py-4">
+                    <button
+                      type="button"
+                      onClick={() => { navigate('/ajustes'); setMobileMenuOpen(false); }}
+                      className="rounded-full ring-2 ring-transparent hover:ring-primary/50 transition-all focus-visible:outline-none focus-visible:ring-primary"
+                      title="Mi perfil"
                     >
-                      {devLoading ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <FlaskConical className="mr-2 h-4 w-4" />}
-                      Dev Login
+                      <Avatar className="h-12 w-12">
+                        {avatarUrl ? <AvatarImage src={avatarUrl} alt={displayName} /> : null}
+                        <AvatarFallback>{initials}</AvatarFallback>
+                      </Avatar>
+                    </button>
+                    <div className="min-w-0 w-full">
+                      <p className="truncate text-sm font-bold text-foreground">{displayName}</p>
+                      <p className="truncate text-xs text-muted-foreground">{t('welcome', { name: displayName })}</p>
+                    </div>
+                    <Button
+                      onClick={() => { navigate('/ajustes'); setMobileMenuOpen(false); }}
+                      variant="outline"
+                      className="w-full rounded-full font-bold"
+                    >
+                      <UserCircle2 className="mr-2 h-4 w-4" />
+                      Mi perfil
                     </Button>
-                  )}
-                </div>
-              )}
-            </div>
-          </div>
-        )}
+                  </div>
+                ) : isGuest ? (
+                  <div className="flex flex-col gap-2 w-full">
+                    <Button onClick={goToLogin} variant="outline" className="w-full rounded-full font-bold">
+                      {t('sign_in')}
+                    </Button>
+                    <Button
+                      onClick={() => { void exitGuest().then(() => { window.location.href = '/'; }); }}
+                      variant="ghost"
+                      className="w-full rounded-full font-bold"
+                    >
+                      <LogOut className="mr-2 h-4 w-4" />
+                      Salir del modo invitado
+                    </Button>
+                  </div>
+                ) : (
+                  <div className="flex flex-col gap-2 w-full">
+                    <Button onClick={goToLogin} variant="outline" className="w-full rounded-full font-bold">
+                      {t('sign_in')}
+                    </Button>
+                    {isDevMode && (
+                      <Button
+                        onClick={handleDevLogin}
+                        disabled={devLoading}
+                        variant="outline"
+                        className="w-full rounded-full border-dashed border-yellow-500/60 font-bold text-yellow-500 hover:bg-yellow-500/10"
+                      >
+                        {devLoading ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <FlaskConical className="mr-2 h-4 w-4" />}
+                        Dev Login
+                      </Button>
+                    )}
+                  </div>
+                )}
+              </div>
+            </motion.div>
+          )}
+        </AnimatePresence>
 
         {isGuest && (
           <div className="mt-4 rounded-2xl border border-purple-300/40 bg-gradient-to-r from-purple-500/12 via-fuchsia-500/10 to-indigo-500/12 px-4 py-3 text-sm font-semibold text-purple-800 dark:text-purple-200">

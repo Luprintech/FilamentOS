@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
-import { render, screen, fireEvent } from '@testing-library/react';
+import { render, screen, fireEvent, waitFor } from '@testing-library/react';
 import { MemoryRouter } from 'react-router-dom';
 import { AppHeader } from './app-header';
 import React from 'react';
@@ -115,7 +115,7 @@ describe('AppHeader mobile menu animation', () => {
     expect(mobileSignIn).toBeInTheDocument();
   });
 
-  it('should remove the mobile drawer from the DOM when toggled closed (exit animation)', () => {
+  it('should remove the mobile drawer from the DOM when toggled closed (exit animation)', async () => {
     render(<AppHeader />, { wrapper: TestWrapper });
 
     // Open
@@ -126,9 +126,13 @@ describe('AppHeader mobile menu animation', () => {
     fireEvent.click(screen.getByRole('button', { name: /cerrar menu/i }));
 
     // After AnimatePresence exit animation, mobile drawer is removed from DOM
-    expect(screen.queryByRole('button', { name: /cerrar menu/i })).not.toBeInTheDocument();
+    await waitFor(() => {
+      expect(screen.queryByRole('button', { name: /cerrar menu/i })).not.toBeInTheDocument();
+    });
 
     // Back to only 1 sign-in button (desktop)
-    expect(screen.getAllByText('Iniciar sesión')).toHaveLength(1);
+    await waitFor(() => {
+      expect(screen.getAllByText('Iniciar sesión')).toHaveLength(1);
+    });
   });
 });

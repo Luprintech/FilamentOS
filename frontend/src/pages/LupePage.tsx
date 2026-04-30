@@ -434,29 +434,32 @@ function ResourcesTab({ categories, tags }: { categories: Category[]; tags: Reso
   return (
     <div className="space-y-5">
       {/* Toolbar */}
-      <div className="flex flex-wrap items-center justify-between gap-3">
-        <div className="flex flex-wrap gap-1.5">
+      <div className="flex flex-col gap-2 sm:flex-row sm:flex-wrap sm:items-center sm:justify-between sm:gap-3">
+        <div className="flex gap-1.5 overflow-x-auto pb-1 scrollbar-none -mx-1 px-1">
           <button
             type="button"
             onClick={() => setFilterCat('all')}
-            className={cn('rounded-full border px-3 py-1 text-xs font-bold transition-colors',
+            className={cn('shrink-0 rounded-full border px-3 py-1 text-xs font-bold transition-colors',
               filterCat === 'all' ? 'border-primary/40 bg-primary/15 text-primary' : 'border-border/50 bg-muted/20 text-muted-foreground hover:text-foreground')}
           >
             Todos ({safeResources.length})
           </button>
-          {categories.map((cat) => (
-            <button
-              key={cat.id}
-              type="button"
-              onClick={() => setFilterCat(cat.id)}
-              className={cn('rounded-full border px-3 py-1 text-xs font-bold transition-colors',
-                filterCat === cat.id ? 'border-primary/40 bg-primary/15 text-primary' : 'border-border/50 bg-muted/20 text-muted-foreground hover:text-foreground')}
-            >
-              {cat.label_es} ({safeResources.filter((r) => r.category === cat.id).length})
-            </button>
-          ))}
+          {categories.map((cat) => {
+            const count = safeResources.filter((r) => r.category === cat.id).length;
+            return (
+              <button
+                key={cat.id}
+                type="button"
+                onClick={() => setFilterCat(cat.id)}
+                className={cn('shrink-0 rounded-full border px-3 py-1 text-xs font-bold transition-colors',
+                  filterCat === cat.id ? 'border-primary/40 bg-primary/15 text-primary' : 'border-border/50 bg-muted/20 text-muted-foreground hover:text-foreground')}
+              >
+                {cat.label_es} ({count})
+              </button>
+            );
+          })}
         </div>
-        <Button className="rounded-full font-bold" onClick={() => setEditTarget('new')}>
+        <Button className="rounded-full font-bold shrink-0 self-start sm:self-auto" onClick={() => setEditTarget('new')}>
           <Plus className="mr-1.5 h-4 w-4" />Nuevo recurso
         </Button>
       </div>
@@ -476,7 +479,7 @@ function ResourcesTab({ categories, tags }: { categories: Category[]; tags: Reso
             return (
               <div key={res.id} className="flex flex-col gap-3 rounded-[18px] border border-border/50 bg-card/50 p-4 sm:flex-row sm:items-center">
                 {/* Thumbnail */}
-                <div className="h-16 w-24 shrink-0 overflow-hidden rounded-xl bg-muted/30">
+                <div className="h-14 w-20 shrink-0 overflow-hidden rounded-xl bg-muted/30 sm:h-16 sm:w-24">
                   {res.custom_image
                     ? <img src={res.custom_image} alt={res.name} className="h-full w-full object-cover" />
                     : <div className="flex h-full w-full items-center justify-center"><ImageOff className="h-5 w-5 text-muted-foreground/30" /></div>}
@@ -484,48 +487,51 @@ function ResourcesTab({ categories, tags }: { categories: Category[]; tags: Reso
 
                 {/* Info */}
                 <div className="min-w-0 flex-1 space-y-1">
-                  <div className="flex flex-wrap items-center gap-2">
+                  <div className="flex flex-wrap items-center gap-1.5">
                     <span className={cn('text-sm font-extrabold text-foreground', cat?.color)}>{res.name}</span>
-                    <span className="rounded-full border border-border/40 bg-muted/30 px-2 py-0.5 text-[0.62rem] font-bold text-muted-foreground">
+                    <span className="rounded-full border border-border/40 bg-muted/30 px-2 py-0.5 text-[0.58rem] font-bold text-muted-foreground">
                       {cat?.label_es ?? res.category}
                     </span>
                     {!!res.is_ai   && <Badge color="blue">IA</Badge>}
                     {!!res.is_free && <Badge color="green">Gratis</Badge>}
                     {!!res.is_new  && <Badge color="pink">Nuevo</Badge>}
-                    {(Array.isArray(res.extra_tags) ? res.extra_tags : []).map((tag) => (
-                      <span key={tag} className="rounded-full border border-border/40 bg-muted/20 px-2 py-0.5 text-[0.6rem] font-extrabold text-foreground/70">{tag}</span>
+                    {(Array.isArray(res.extra_tags) ? res.extra_tags : []).slice(0, 2).map((tag) => (
+                      <span key={tag} className="rounded-full border border-border/40 bg-muted/20 px-2 py-0.5 text-[0.55rem] font-extrabold text-foreground/70">{tag}</span>
                     ))}
                   </div>
                   <p className="line-clamp-1 text-xs text-muted-foreground">{res.description}</p>
-                  <a href={res.url} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1 text-[0.68rem] text-muted-foreground/60 hover:text-foreground">
-                    <ExternalLink className="h-3 w-3" />
-                    {res.url.length > 60 ? res.url.slice(0, 60) + '…' : res.url}
+                  <a href={res.url} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1 text-[0.65rem] text-muted-foreground/60 hover:text-foreground truncate max-w-full">
+                    <ExternalLink className="h-3 w-3 shrink-0" />
+                    <span className="truncate">{res.url.length > 60 ? res.url.slice(0, 60) + '…' : res.url}</span>
                   </a>
                 </div>
 
-                {/* Image uploader */}
-                <div className="shrink-0"><ImageUploader resource={res} onDone={load} /></div>
-
-                {/* Actions */}
-                <div className="flex shrink-0 items-center gap-1.5">
-                  <Button variant="outline" size="icon" className="h-8 w-8 rounded-full" onClick={() => setEditTarget(res)}>
-                    <Pencil className="h-3.5 w-3.5" />
-                  </Button>
-                  {isDeleting ? (
-                    <div className="flex items-center gap-1">
-                      <Button size="sm" variant="destructive" className="h-8 rounded-full px-3 text-xs font-bold" disabled={deleting} onClick={() => handleDelete(res.id)}>
-                        {deleting ? <Loader2 className="h-3 w-3 animate-spin" /> : '¿Seguro?'}
-                      </Button>
-                      <Button size="icon" variant="outline" className="h-8 w-8 rounded-full" onClick={() => setDeleteId(null)}>
-                        <X className="h-3.5 w-3.5" />
-                      </Button>
-                    </div>
-                  ) : (
-                    <Button variant="outline" size="icon" className="h-8 w-8 rounded-full border-destructive/30 text-destructive hover:bg-destructive/10" onClick={() => setDeleteId(res.id)}>
-                      <Trash2 className="h-3.5 w-3.5" />
+                {/* Image uploader + Actions — same row on mobile */}
+                <div className="flex items-center gap-2 sm:flex-col sm:shrink-0">
+                  <div className="sm:hidden"><ImageUploader resource={res} onDone={load} /></div>
+                  <div className="flex shrink-0 items-center gap-1.5">
+                    <Button variant="outline" size="icon" className="h-8 w-8 rounded-full" onClick={() => setEditTarget(res)}>
+                      <Pencil className="h-3.5 w-3.5" />
                     </Button>
-                  )}
+                    {isDeleting ? (
+                      <div className="flex items-center gap-1">
+                        <Button size="sm" variant="destructive" className="h-8 rounded-full px-3 text-xs font-bold" disabled={deleting} onClick={() => handleDelete(res.id)}>
+                          {deleting ? <Loader2 className="h-3 w-3 animate-spin" /> : '¿Seguro?'}
+                        </Button>
+                        <Button size="icon" variant="outline" className="h-8 w-8 rounded-full" onClick={() => setDeleteId(null)}>
+                          <X className="h-3.5 w-3.5" />
+                        </Button>
+                      </div>
+                    ) : (
+                      <Button variant="outline" size="icon" className="h-8 w-8 rounded-full border-destructive/30 text-destructive hover:bg-destructive/10" onClick={() => setDeleteId(res.id)}>
+                        <Trash2 className="h-3.5 w-3.5" />
+                      </Button>
+                    )}
+                  </div>
                 </div>
+
+                {/* Desktop image uploader */}
+                <div className="hidden sm:block shrink-0"><ImageUploader resource={res} onDone={load} /></div>
               </div>
             );
           })}
@@ -1202,18 +1208,18 @@ function CatalogTab() {
   return (
     <div className="space-y-3">
       {/* Header con acciones */}
-      <div className="flex flex-wrap items-center justify-between gap-3">
+      <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between sm:gap-3">
         <div>
-          <h3 className="text-base font-bold text-foreground">Catálogo global de filamentos</h3>
-          <p className="text-xs text-muted-foreground">Gestiona enlaces de afiliado y añade marcas españolas</p>
+          <h3 className="text-sm sm:text-base font-bold text-foreground">Catálogo global de filamentos</h3>
+          <p className="text-xs text-muted-foreground hidden sm:block">Gestiona enlaces de afiliado y añade marcas españolas</p>
         </div>
-        <div className="flex flex-wrap gap-2">
-          <Button size="sm" className="rounded-full font-bold" onClick={handleSync} disabled={syncing}>
-            {syncing ? <Loader2 className="mr-2 h-3.5 w-3.5 animate-spin" /> : null}
+        <div className="flex flex-wrap gap-1.5">
+          <Button size="sm" className="rounded-full font-bold text-xs" onClick={handleSync} disabled={syncing}>
+            {syncing ? <Loader2 className="mr-1 h-3 w-3 animate-spin" /> : null}
             Sincronizar
           </Button>
-          <Button size="sm" variant="outline" className="rounded-full" onClick={() => setAddModalOpen(true)}>
-            <Plus className="mr-1.5 h-3.5 w-3.5" />
+          <Button size="sm" variant="outline" className="rounded-full text-xs" onClick={() => setAddModalOpen(true)}>
+            <Plus className="mr-1 h-3 w-3" />
             Añadir
           </Button>
           <Button size="sm" variant="outline" className="rounded-full" onClick={() => window.open('/filamentos/globales', '_blank')}>
@@ -1618,7 +1624,7 @@ function AdminPanel() {
             <h1 className="challenge-gradient-text text-xl font-black leading-none">filamentOS</h1>
             <p className="text-[0.7rem] text-muted-foreground">Panel de administración</p>
           </div>
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-1.5 sm:gap-2">
             {/* Tab bar */}
             <nav className="hidden sm:flex items-center gap-1 rounded-full border border-border/50 bg-muted/20 p-1">
               {TABS.map((t) => (
@@ -1643,27 +1649,28 @@ function AdminPanel() {
               className="rounded-full"
               onClick={() => window.open('/inventario', '_blank')}
             >
-              <Package className="mr-1.5 h-3.5 w-3.5" />Ver filamentos
+              <Package className="h-3.5 w-3.5 sm:mr-1.5" /><span className="hidden sm:inline">Ver filamentos</span>
             </Button>
             <Button variant="outline" size="sm" className="rounded-full" onClick={logout}>
-              <LogOut className="mr-1.5 h-3.5 w-3.5" />Salir
+              <LogOut className="h-3.5 w-3.5 sm:mr-1.5" /><span className="hidden sm:inline">Salir</span>
             </Button>
           </div>
         </div>
 
         {/* Mobile tabs */}
-        <div className="sm:hidden flex border-t border-border/50">
+        <div className="sm:hidden flex border-t border-border/50 overflow-x-auto">
           {TABS.map((t) => (
             <button
               key={t.id}
               type="button"
               onClick={() => setTab(t.id)}
               className={cn(
-                'flex flex-1 items-center justify-center gap-1.5 py-2.5 text-xs font-bold transition-colors',
+                'flex flex-1 items-center justify-center gap-1 py-2.5 text-[0.65rem] font-bold whitespace-nowrap transition-colors min-w-0',
                 tab === t.id ? 'text-primary border-b-2 border-primary' : 'text-muted-foreground',
               )}
             >
-              {t.icon}{t.label}
+              {t.icon}
+              <span className="max-[400px]:hidden">{t.label}</span>
             </button>
           ))}
         </div>
