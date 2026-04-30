@@ -66,10 +66,10 @@ type View =
   | 'verified';      // cuenta verificada correctamente
 
 export function LoginPage() {
+  const navigate = useNavigate();
   const { loginWithGoogle, loginWithEmail, register, authLoading } = useAuth();
   const { t } = useTranslation();
   const { resolvedTheme } = useTheme();
-  const navigate = useNavigate();
   const currentYear = new Date().getFullYear();
 
   // Leer params de la URL al cargar
@@ -138,9 +138,15 @@ export function LoginPage() {
       // Redirigir a calculadora después del login
       navigate('/calculadora', { replace: true });
     } catch (err: unknown) {
-      const msg = err instanceof Error ? err.message : t('login_error_invalid');
-      if (msg.toLowerCase().includes('google')) setError(t('login_google_only'));
-      else setError(msg);
+      console.error('[LOGIN ERROR]', err);
+      const msg = err instanceof Error ? err.message : 'Email o contraseña incorrectos';
+      if (msg.toLowerCase().includes('google')) {
+        setError('Esta cuenta usa Google. Inicia sesión con Google.');
+      } else if (msg.toLowerCase().includes('verificado') || msg.toLowerCase().includes('verified')) {
+        setError('Debes verificar tu email antes de iniciar sesión');
+      } else {
+        setError(msg);
+      }
     } finally {
       setSubmitting(false);
     }
@@ -228,9 +234,12 @@ export function LoginPage() {
   function ErrorBox() {
     if (!error) return null;
     return (
-      <p className="rounded-xl border border-destructive/30 bg-destructive/10 px-3 py-2 text-sm font-medium text-destructive">
-        {error}
-      </p>
+      <div className="rounded-xl border-2 border-destructive/50 bg-destructive/15 px-4 py-3 text-sm font-semibold text-destructive shadow-sm animate-in fade-in slide-in-from-top-2 duration-300">
+        <p className="flex items-center gap-2">
+          <span className="text-base">⚠️</span>
+          {error}
+        </p>
+      </div>
     );
   }
 
@@ -301,8 +310,8 @@ export function LoginPage() {
           <h2 className="text-xl font-extrabold text-foreground">¡Contraseña actualizada!</h2>
           <p className="mt-1 text-sm text-muted-foreground">Ya puedes iniciar sesión con tu nueva contraseña.</p>
         </div>
-        <Button className="w-full rounded-2xl font-bold" size="lg" onClick={() => goTo('email-login')}>
-          Iniciar sesión
+        <Button className="w-full rounded-2xl font-bold" size="lg" onClick={() => navigate('/calculadora', { replace: true })}>
+          Entrar a FilamentOS
         </Button>
       </div>
     );

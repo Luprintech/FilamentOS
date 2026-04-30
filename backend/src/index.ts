@@ -952,6 +952,7 @@ app.post('/api/auth/login', async (req, res) => {
     const { email, password } = req.body as { email?: string; password?: string };
 
     if (!email || !password) {
+      console.log('[LOGIN] Error: campos vacíos');
       res.status(400).json({ error: 'Email y contraseña son obligatorios' });
       return;
     }
@@ -960,23 +961,26 @@ app.post('/api/auth/login', async (req, res) => {
     const user = db.prepare('SELECT * FROM users WHERE email = ?').get(normalizedEmail) as (DbUser & { password_hash: string | null }) | undefined;
 
     if (!user) {
+      console.log('[LOGIN] Error: usuario no encontrado -', normalizedEmail);
       res.status(401).json({ error: 'Email o contraseña incorrectos' });
       return;
     }
 
     if (!user.password_hash) {
+      console.log('[LOGIN] Error: cuenta de Google -', normalizedEmail);
       res.status(401).json({ error: 'Esta cuenta usa Google. Inicia sesión con Google.' });
       return;
     }
 
     const valid = bcrypt.compareSync(password, user.password_hash);
     if (!valid) {
+      console.log('[LOGIN] Error: contraseña incorrecta -', normalizedEmail);
       res.status(401).json({ error: 'Email o contraseña incorrectos' });
       return;
     }
 
     if (!user.email_verified) {
-      res.status(403).json({ error: 'email_not_verified', email: normalizedEmail });
+      res.status(403).json({ error: 'Debes verificar tu email antes de iniciar sesión. Revisa tu bandeja de entrada.', email: normalizedEmail });
       return;
     }
 

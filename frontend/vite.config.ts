@@ -16,11 +16,19 @@ export default defineConfig({
     proxy: {
       '/api': {
         target: 'http://localhost:3001',
-        changeOrigin: true,
+        changeOrigin: false,
+        secure: false,
+        ws: true,
+        configure: (proxy, _options) => {
+          proxy.on('proxyReq', (proxyReq) => {
+            proxyReq.setHeader('Origin', 'http://localhost:9002');
+          });
+        },
       },
       '/uploads': {
         target: 'http://localhost:3001',
-        changeOrigin: true,
+        changeOrigin: false,
+        secure: false,
       },
     },
   },
