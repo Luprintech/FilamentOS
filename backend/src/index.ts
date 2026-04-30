@@ -23,6 +23,23 @@ dotenv.config();
 
 const PORT = parseInt(process.env.PORT || '3001', 10);
 const CLIENT_ORIGIN = process.env.CLIENT_ORIGIN || 'http://localhost:9002';
+
+/**
+ * Resuelve el origen del cliente dinámicamente.
+ * - Si hay request, usa las cabeceras X-Forwarded (enviadas por Nginx).
+ * - Si no, usa CLIENT_ORIGIN del .env (fallback para contextos sin request).
+ */
+function resolveClientOrigin(req?: { headers: Record<string, string | string[] | undefined> }): string {
+  if (!req) return CLIENT_ORIGIN;
+  const proto = req.headers['x-forwarded-proto'];
+  const host = req.headers['x-forwarded-host'] || req.headers['host'];
+  if (proto && host) {
+    const p = Array.isArray(proto) ? proto[0] : proto;
+    const h = Array.isArray(host) ? host[0] : host;
+    return `${p}://${h}`;
+  }
+  return CLIENT_ORIGIN;
+}
 const FEATURE_GLOBAL_FILAMENT_CATALOG = process.env.FEATURE_GLOBAL_FILAMENT_CATALOG !== 'false';
 const FEATURE_FILAMENTCOLORS_SYNC = process.env.FEATURE_FILAMENTCOLORS_SYNC !== 'false';
 // Use || (not ??) so that DB_PATH='' (empty string in .env) also falls back to the default path.
@@ -714,7 +731,9 @@ passport.use(
     {
       clientID: process.env.GOOGLE_CLIENT_ID!,
       clientSecret: process.env.GOOGLE_CLIENT_SECRET!,
-      callbackURL: `${CLIENT_ORIGIN}/api/auth/google/callback`,
+      // callbackURL se pasa dinámicamente en la ruta (abajo) para que funcione
+      // tanto en local como en producción sin depender de CLIENT_ORIGIN estático.
+      callbackURL: '/api/auth/google/callback',
     },
     (_accessToken, _refreshToken, profile, done) => {
       const existing = db
@@ -861,6 +880,12 @@ app.use(cors({
   },
   credentials: true,
 }));
+
+// Confiar en los headers de Nginx (X-Forwarded-Proto, X-Forwarded-Host)
+// Necesario para que req.protocol, req.hostname y las URLs absolutas de Passport
+// funcionen correctamente detrás de un proxy inverso.
+app.set('trust proxy', 1);
+
 app.use(express.json({ limit: '25mb' }));
 
 app.use(
@@ -889,14 +914,19 @@ app.get(
 
 app.get(
   '/api/auth/google/callback',
-  passport.authenticate('google', {
-    failureRedirect: `${CLIENT_ORIGIN}?error=auth_failed`,
-  }),
-  (_req, res) => res.redirect(CLIENT_ORIGIN)
+  (req, _res, next) => {
+    // Sobrescribir failureRedirect dinámicamente
+    const origin = resolveClientOrigin(req);
+    passport.authenticate('google', {
+      failureRedirect: `${origin}?error=auth_failed`,
+    })(req, _res, next);
+  },
+  (req, res) => res.redirect(resolveClientOrigin(req))
 );
 
 app.get('/api/auth/logout', (req, res) => {
-  req.logout(() => res.redirect(CLIENT_ORIGIN));
+  const origin = resolveClientOrigin(req);
+  req.logout(() => res.redirect(origin));
 });
 
 // ── Email + Password Auth ────────────────────────────────────────────────────
@@ -4117,11 +4147,11 @@ app.get('/api/auth/verify-email', async (req, res) => {
   ).get(token) as { id: string; user_id: string; expires_at: number } | undefined;
 
   if (!row) {
-    res.redirect(`${CLIENT_ORIGIN}/login?error=token_invalid`);
+    res.redirect(`${resolveClientOrigin(req)}/login?error=token_invalid`);
     return;
   }
   if (row.expires_at < Date.now()) {
-    res.redirect(`${CLIENT_ORIGIN}/login?error=token_expired`);
+    res.redirect(`${resolveClientOrigin(req)}/login?error=token_expired`);
     return;
   }
 
@@ -4130,8 +4160,8 @@ app.get('/api/auth/verify-email', async (req, res) => {
 
   const user = db.prepare('SELECT * FROM users WHERE id=?').get(row.user_id) as DbUser;
   req.login(user, (err) => {
-    if (err) { res.redirect(`${CLIENT_ORIGIN}/login?error=login_failed`); return; }
-    res.redirect(`${CLIENT_ORIGIN}/login?verified=1`);
+    if (err) { res.redirect(`${resolveClientOrigin(req)}/login?error=login_failed`); return; }
+    res.redirect(`${resolveClientOrigin(req)}/login?verified=1`);
   });
 });
 

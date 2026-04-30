@@ -169,31 +169,76 @@ export function PoliticaPrivacidadPage() {
             <p className="text-muted-foreground">
               {t('privacy_section7_intro')}
             </p>
-            <div className="overflow-x-auto">
-              <table className="w-full border-collapse text-sm">
-                <thead>
-                  <tr className="border-b border-border/50">
-                    <th className="p-3 text-left font-semibold text-foreground">{t('privacy_table_header_name')}</th>
-                    <th className="p-3 text-left font-semibold text-foreground">{t('privacy_table_header_type')}</th>
-                    <th className="p-3 text-left font-semibold text-foreground">{t('privacy_table_header_duration')}</th>
-                    <th className="p-3 text-left font-semibold text-foreground">{t('privacy_table_header_purpose')}</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  <tr className="border-b border-border/30">
-                    <td className="p-3 font-mono text-xs text-muted-foreground">connect.sid</td>
-                    <td className="p-3 text-muted-foreground">{t('privacy_table_row1_type')}</td>
-                    <td className="p-3 text-muted-foreground">{t('privacy_table_row1_duration')}</td>
-                    <td className="p-3 text-muted-foreground">{t('privacy_table_row1_purpose')}</td>
-                  </tr>
-                  <tr className="border-b border-border/30">
-                    <td className="p-3 font-mono text-xs text-muted-foreground">cookieConsent</td>
-                    <td className="p-3 text-muted-foreground">{t('privacy_table_row2_type')}</td>
-                    <td className="p-3 text-muted-foreground">{t('privacy_table_row2_duration')}</td>
-                    <td className="p-3 text-muted-foreground">{t('privacy_table_row2_purpose')}</td>
-                  </tr>
-                </tbody>
-              </table>
+            {/* Desktop table */}
+            <div className="hidden sm:block">
+              <div className="overflow-x-auto">
+                <table className="w-full border-collapse text-sm">
+                  <thead>
+                    <tr className="border-b border-border/50">
+                      <th className="p-3 text-left font-semibold text-foreground">{t('privacy_table_header_name')}</th>
+                      <th className="p-3 text-left font-semibold text-foreground">{t('privacy_table_header_type')}</th>
+                      <th className="p-3 text-left font-semibold text-foreground">{t('privacy_table_header_duration')}</th>
+                      <th className="p-3 text-left font-semibold text-foreground">{t('privacy_table_header_purpose')}</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    <tr className="border-b border-border/30">
+                      <td className="p-3 font-mono text-xs text-muted-foreground">connect.sid</td>
+                      <td className="p-3 text-muted-foreground">{t('privacy_table_row1_type')}</td>
+                      <td className="p-3 text-muted-foreground">{t('privacy_table_row1_duration')}</td>
+                      <td className="p-3 text-muted-foreground">{t('privacy_table_row1_purpose')}</td>
+                    </tr>
+                    <tr className="border-b border-border/30">
+                      <td className="p-3 font-mono text-xs text-muted-foreground">cookieConsent</td>
+                      <td className="p-3 text-muted-foreground">{t('privacy_table_row2_type')}</td>
+                      <td className="p-3 text-muted-foreground">{t('privacy_table_row2_duration')}</td>
+                      <td className="p-3 text-muted-foreground">{t('privacy_table_row2_purpose')}</td>
+                    </tr>
+                  </tbody>
+                </table>
+              </div>
+            </div>
+
+            {/* Mobile cards */}
+            <div className="block sm:hidden space-y-3">
+              {/* connect.sid */}
+              <div className="rounded-xl border border-border/50 bg-card/50 p-3 space-y-2">
+                <div className="flex justify-between items-start gap-2">
+                  <span className="text-xs font-semibold text-muted-foreground shrink-0">{t('privacy_table_header_name')}</span>
+                  <span className="text-xs text-foreground text-right font-mono">connect.sid</span>
+                </div>
+                <div className="flex justify-between items-start gap-2">
+                  <span className="text-xs font-semibold text-muted-foreground shrink-0">{t('privacy_table_header_type')}</span>
+                  <span className="text-xs text-foreground text-right">{t('privacy_table_row1_type')}</span>
+                </div>
+                <div className="flex justify-between items-start gap-2">
+                  <span className="text-xs font-semibold text-muted-foreground shrink-0">{t('privacy_table_header_duration')}</span>
+                  <span className="text-xs text-foreground text-right">{t('privacy_table_row1_duration')}</span>
+                </div>
+                <div className="flex justify-between items-start gap-2">
+                  <span className="text-xs font-semibold text-muted-foreground shrink-0">{t('privacy_table_header_purpose')}</span>
+                  <span className="text-xs text-foreground text-right">{t('privacy_table_row1_purpose')}</span>
+                </div>
+              </div>
+              {/* cookieConsent */}
+              <div className="rounded-xl border border-border/50 bg-card/50 p-3 space-y-2">
+                <div className="flex justify-between items-start gap-2">
+                  <span className="text-xs font-semibold text-muted-foreground shrink-0">{t('privacy_table_header_name')}</span>
+                  <span className="text-xs text-foreground text-right font-mono">cookieConsent</span>
+                </div>
+                <div className="flex justify-between items-start gap-2">
+                  <span className="text-xs font-semibold text-muted-foreground shrink-0">{t('privacy_table_header_type')}</span>
+                  <span className="text-xs text-foreground text-right">{t('privacy_table_row2_type')}</span>
+                </div>
+                <div className="flex justify-between items-start gap-2">
+                  <span className="text-xs font-semibold text-muted-foreground shrink-0">{t('privacy_table_header_duration')}</span>
+                  <span className="text-xs text-foreground text-right">{t('privacy_table_row2_duration')}</span>
+                </div>
+                <div className="flex justify-between items-start gap-2">
+                  <span className="text-xs font-semibold text-muted-foreground shrink-0">{t('privacy_table_header_purpose')}</span>
+                  <span className="text-xs text-foreground text-right">{t('privacy_table_row2_purpose')}</span>
+                </div>
+              </div>
             </div>
             <p className="text-muted-foreground text-xs mt-2">
               {t('privacy_section7_footer')}

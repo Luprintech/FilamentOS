@@ -5,6 +5,7 @@ import { Input } from '@/components/ui/input';
 import {
   Loader2, LogOut, Plus, Pencil, Trash2, ImagePlus, X, Check,
   ExternalLink, ImageOff, KeyRound, Tag, LayoutList, Eye, EyeOff, Package, Filter,
+  ShoppingCart,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { httpRequest, HttpClientError } from '@/shared/api/http-client';
@@ -1294,56 +1295,71 @@ function CatalogTab() {
         </div>
       ) : (
         <>
-          <div className="overflow-x-auto rounded-lg border border-border/50">
-            <table className="w-full text-xs">
-              <thead className="bg-muted/30">
-                <tr className="border-b border-border/50">
-                  <th className="p-2 text-left font-bold text-foreground">Imagen</th>
-                  <th className="p-2 text-left font-bold text-foreground">Marca</th>
-                  <th className="p-2 text-left font-bold text-foreground">Material</th>
-                  <th className="p-2 text-left font-bold text-foreground">Color</th>
-                  <th className="p-2 text-left font-bold text-foreground">Enlace compra</th>
-                  <th className="p-2 text-right font-bold text-foreground">Acciones</th>
-                </tr>
-              </thead>
-              <tbody>
-                {filaments.map((fil) => (
-                  <tr key={fil.id} className="border-b border-border/30 hover:bg-muted/10">
-                    <td className="p-2">
-                      {fil.customImage ? (
-                        <img src={fil.customImage} alt={fil.color} className="h-8 w-8 rounded border border-border object-cover" />
-                      ) : (
-                        <SpoolIcon colorHex={fil.colorHex || '#888'} size={32} />
+          {/* Filament grid — replaces the table */}
+          <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
+            {filaments.map((fil) => (
+              <div key={fil.id} className="flex gap-3 rounded-[18px] border border-border/50 bg-card/50 p-3">
+                {/* Image / SpoolIcon */}
+                <div className="h-12 w-12 shrink-0">
+                  {fil.customImage ? (
+                    <img src={fil.customImage} alt={fil.color || ''} className="h-12 w-12 rounded-xl border border-border/60 object-cover" />
+                  ) : (
+                    <SpoolIcon colorHex={fil.colorHex || '#888'} size={48} />
+                  )}
+                </div>
+
+                {/* Info */}
+                <div className="min-w-0 flex-1 space-y-1">
+                  <div className="flex items-start justify-between gap-2">
+                    <div className="min-w-0">
+                      <p className="text-sm font-extrabold text-foreground truncate">
+                        {fil.brand || '—'}
+                      </p>
+                      <p className="text-xs text-muted-foreground truncate">
+                        {fil.material || '—'} · {fil.color || '—'}
+                      </p>
+                    </div>
+                    <div className="flex gap-1 shrink-0">
+                      <button
+                        onClick={() => setEditTarget(fil)}
+                        className="h-8 w-8 rounded-lg border border-border/40 flex items-center justify-center hover:bg-muted/50 transition-colors"
+                        title="Editar enlace"
+                      >
+                        <Pencil className="h-3.5 w-3.5 text-muted-foreground" />
+                      </button>
+                      {fil.source === 'manual' && (
+                        <button
+                          onClick={() => handleDelete(fil.id)}
+                          className="h-8 w-8 rounded-lg border border-border/40 flex items-center justify-center hover:bg-destructive/10 transition-colors"
+                          title="Eliminar"
+                        >
+                          <Trash2 className="h-3.5 w-3.5 text-destructive" />
+                        </button>
                       )}
-                    </td>
-                    <td className="p-2 font-medium text-foreground">{fil.brand}</td>
-                    <td className="p-2 text-muted-foreground">{fil.material}</td>
-                    <td className="p-2 text-muted-foreground">{fil.color}</td>
-                    <td className="p-2">
-                      {fil.purchaseUrl ? (
-                        <a href={fil.purchaseUrl} target="_blank" rel="noopener noreferrer" className="max-w-xs truncate text-primary hover:underline block">
-                          {fil.purchaseUrl.length > 40 ? fil.purchaseUrl.slice(0, 40) + '...' : fil.purchaseUrl}
-                        </a>
-                      ) : (
-                        <span className="text-muted-foreground/50">—</span>
-                      )}
-                    </td>
-                    <td className="p-2">
-                      <div className="flex justify-end gap-1">
-                        <Button size="sm" variant="ghost" className="h-6 w-6 p-0" onClick={() => setEditTarget(fil)} title="Editar enlace">
-                          <Pencil className="h-3 w-3" />
-                        </Button>
-                        {fil.source === 'manual' && (
-                          <Button size="sm" variant="ghost" className="h-6 w-6 p-0 text-destructive" onClick={() => handleDelete(fil.id)} title="Eliminar">
-                            <Trash2 className="h-3 w-3" />
-                          </Button>
-                        )}
-                      </div>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
+                    </div>
+                  </div>
+
+                  {/* Purchase URL */}
+                  <div className="pt-1">
+                    {fil.purchaseUrl ? (
+                      <a
+                        href={fil.purchaseUrl}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="inline-flex items-center gap-1 rounded-lg border border-primary/20 bg-primary/5 px-3 py-1.5 text-xs font-semibold text-primary hover:bg-primary/10 transition-colors"
+                      >
+                        <ShoppingCart className="h-3 w-3" />
+                        <span className="truncate max-w-[180px]">
+                          {fil.purchaseUrl.replace(/^https?:\/\//, '').replace(/\/$/, '')}
+                        </span>
+                      </a>
+                    ) : (
+                      <span className="text-xs text-muted-foreground/50 italic">Sin enlace</span>
+                    )}
+                  </div>
+                </div>
+              </div>
+            ))}
           </div>
 
           {pagination.totalPages > 1 && (
