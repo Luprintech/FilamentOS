@@ -224,8 +224,18 @@ export function StatsExportButtons({ data, filters }: StatsExportButtonsProps) {
   const [open, setOpen]           = useState(false);
   const [state, setState]         = useState<ExportState>('idle');
   const menuRef                   = useRef<HTMLDivElement>(null);
+  const [menuPosition, setMenuPosition] = useState<{ top: number; right: number } | null>(null);
 
   function closeMenu() { setOpen(false); }
+
+  React.useEffect(() => {
+    if (!open || !menuRef.current) return;
+    const rect = menuRef.current.getBoundingClientRect();
+    setMenuPosition({
+      top: rect.bottom + 8,
+      right: Math.max(16, window.innerWidth - rect.right),
+    });
+  }, [open]);
 
   async function handleExport() {
     setState('loading');
@@ -274,7 +284,10 @@ export function StatsExportButtons({ data, filters }: StatsExportButtonsProps) {
       {open && (
         <>
           <div className="fixed inset-0 z-40" onClick={closeMenu} />
-          <div className="absolute right-0 z-50 mt-2 w-72 overflow-hidden rounded-[16px] border border-border/60 bg-card/95 shadow-2xl backdrop-blur-md">
+          <div
+            className="fixed z-[60] w-72 max-w-[calc(100vw-2rem)] overflow-hidden rounded-[16px] border border-border/60 bg-card/95 shadow-2xl backdrop-blur-md"
+            style={menuPosition ? { top: menuPosition.top, right: menuPosition.right } : { top: 80, right: 16 }}
+          >
             <p className="border-b border-border/40 px-4 py-2.5 text-[0.65rem] font-bold uppercase tracking-wider text-muted-foreground">
               {t('stats_export_choose')}
             </p>
