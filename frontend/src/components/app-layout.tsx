@@ -4,7 +4,12 @@ import { AppHeader } from '@/components/app-header';
 import { AppNav } from '@/components/app-nav';
 import { AppFooter } from '@/components/app-footer';
 
-export function AppLayout() {
+interface AppLayoutProps {
+  onOpenChatbot?: () => void;
+  onOpenChatbotHelp?: () => void;
+}
+
+export function AppLayout({ onOpenChatbot, onOpenChatbotHelp }: AppLayoutProps) {
   return (
     <main className="flex min-h-screen flex-col items-center px-4 pb-10 pt-6 sm:px-8 md:px-10">
       <GlobalBackground />
@@ -12,7 +17,7 @@ export function AppLayout() {
         <AppHeader />
         <AppNav />
         <Outlet />
-        <AppFooter />
+        <AppFooter onOpenChatbot={onOpenChatbot} onOpenChatbotHelp={onOpenChatbotHelp} />
       </div>
     </main>
   );

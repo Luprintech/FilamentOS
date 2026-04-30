@@ -1,5 +1,6 @@
 import React from 'react';
-import { Sun, Moon, Download, LogOut, FlaskConical, Info, Menu, X, UserCircle2 } from 'lucide-react';
+import { useNavigate } from 'react-router-dom';
+import { Sun, Moon, Download, LogOut, FlaskConical, Menu, X, UserCircle2 } from 'lucide-react';
 import { Loader2 } from 'lucide-react';
 import { useTheme } from 'next-themes';
 import { useTranslation } from 'react-i18next';
@@ -8,8 +9,6 @@ import { Button } from '@/components/ui/button';
 import { Avatar, AvatarImage, AvatarFallback } from '@/components/ui/avatar';
 import { LanguageSelector } from '@/components/language-selector';
 import { CurrencySelector } from '@/components/currency-selector';
-import { AboutModal } from '@/components/about-modal';
-import { ProfileModal } from '@/components/profile-modal';
 import { useAuth } from '@/context/auth-context';
 import { usePwaInstall } from '@/hooks/use-pwa-install';
 
@@ -33,8 +32,7 @@ export function AppHeader() {
   const { t } = useTranslation();
   const { resolvedTheme } = useTheme();
   const { canInstall, install } = usePwaInstall();
-  const [aboutOpen, setAboutOpen] = React.useState(false);
-  const [profileOpen, setProfileOpen] = React.useState(false);
+  const navigate = useNavigate();
   const [mobileMenuOpen, setMobileMenuOpen] = React.useState(false);
   const [isDevMode, setIsDevMode] = React.useState(false);
   const [devLoading, setDevLoading] = React.useState(false);
@@ -67,9 +65,6 @@ export function AppHeader() {
           <Download className="h-4 w-4" />
         </Button>
       )}
-      <Button variant="outline" size="icon" onClick={() => setAboutOpen(true)} title="Acerca de FilamentOS">
-        <Info className="h-4 w-4" />
-      </Button>
       <ThemeToggle />
       <LanguageSelector />
       <CurrencySelector />
@@ -78,12 +73,9 @@ export function AppHeader() {
 
   const authControls = user ? (
     <>
-      <Button onClick={logout} variant="outline" size="icon" title={t('sign_out')}>
-        <LogOut className="h-4 w-4" />
-      </Button>
       <button
         type="button"
-        onClick={() => setProfileOpen(true)}
+        onClick={() => navigate('/ajustes')}
         className="hidden sm:flex rounded-full ring-2 ring-transparent hover:ring-primary/50 transition-all focus-visible:outline-none focus-visible:ring-primary"
         title="Mi perfil"
         aria-label="Abrir perfil"
@@ -189,23 +181,17 @@ export function AppHeader() {
                 <div className="flex w-full justify-center"><LanguageSelector /></div>
                 <div className="flex w-full justify-center"><CurrencySelector /></div>
               </div>
-              <div className={`grid w-full gap-2 ${canInstall ? 'grid-cols-2' : 'grid-cols-1'}`}>
-                {canInstall && (
-                  <Button variant="outline" onClick={install} className="rounded-full font-bold">
-                    <Download className="mr-2 h-4 w-4" />
-                    {t('install_title')}
-                  </Button>
-                )}
-                <Button variant="outline" onClick={() => setAboutOpen(true)} className="rounded-full font-bold">
-                  <Info className="mr-2 h-4 w-4" />
-                  Info
+              {canInstall && (
+                <Button variant="outline" onClick={install} className="w-full rounded-full font-bold">
+                  <Download className="mr-2 h-4 w-4" />
+                  {t('install_title')}
                 </Button>
-              </div>
+              )}
               {user ? (
                 <div className="flex w-full flex-col items-center gap-3 rounded-2xl border border-border/60 bg-background/60 px-4 py-4">
                   <button
                     type="button"
-                    onClick={() => { setProfileOpen(true); setMobileMenuOpen(false); }}
+                    onClick={() => { navigate('/ajustes'); setMobileMenuOpen(false); }}
                     className="rounded-full ring-2 ring-transparent hover:ring-primary/50 transition-all focus-visible:outline-none focus-visible:ring-primary"
                     title="Mi perfil"
                   >
@@ -219,16 +205,12 @@ export function AppHeader() {
                     <p className="truncate text-xs text-muted-foreground">{t('welcome', { name: displayName })}</p>
                   </div>
                   <Button
-                    onClick={() => { setProfileOpen(true); setMobileMenuOpen(false); }}
+                    onClick={() => { navigate('/ajustes'); setMobileMenuOpen(false); }}
                     variant="outline"
                     className="w-full rounded-full font-bold"
                   >
                     <UserCircle2 className="mr-2 h-4 w-4" />
                     Mi perfil
-                  </Button>
-                  <Button onClick={logout} variant="outline" className="w-full rounded-full font-bold">
-                    <LogOut className="mr-2 h-4 w-4" />
-                    {t('sign_out')}
                   </Button>
                 </div>
               ) : isGuest ? (
@@ -273,9 +255,6 @@ export function AppHeader() {
           </div>
         )}
       </motion.header>
-
-      <AboutModal open={aboutOpen} onOpenChange={setAboutOpen} />
-      <ProfileModal open={profileOpen} onOpenChange={setProfileOpen} />
     </>
   );
 }

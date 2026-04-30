@@ -1,4 +1,5 @@
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
+import { useEffect, useRef } from 'react';
 import { Loader2 } from 'lucide-react';
 import { ThemeProvider } from '@/components/theme-provider';
 import { Toaster } from '@/components/ui/toaster';
@@ -7,7 +8,7 @@ import { CurrencyProvider } from '@/context/currency-context';
 import { ErrorBoundary } from '@/components/error-boundary';
 import { QueryProvider } from '@/components/query-provider';
 import { CookieBanner } from '@/components/cookie-banner';
-import { ChatBotBobina } from '@/components/chatbot-bobina';
+import { ChatBotBobina, ChatBotHandle } from '@/components/chatbot-bobina';
 import { IosInstallBanner } from '@/components/ios-install-banner';
 import { useCookieConsent } from '@/hooks/use-cookie-consent';
 import { AppLayout } from '@/components/app-layout';
@@ -25,6 +26,11 @@ import { NuevaPiezaPage } from '@/pages/bitacora/NuevaPiezaPage';
 import { PiezasPage } from '@/pages/bitacora/PiezasPage';
 import { BitacoraPdfPage } from '@/pages/bitacora/BitacoraPdfPage';
 import { RecursosPage } from '@/pages/RecursosPage';
+import { SettingsPage } from '@/pages/SettingsPage';
+import { PoliticaPrivacidadPage } from '@/pages/PoliticaPrivacidadPage';
+import { CookiesPage } from '@/pages/CookiesPage';
+import { TerminosPage } from '@/pages/TerminosPage';
+import { AcercaPage } from '@/pages/AcercaPage';
 import { LupePage } from '@/pages/LupePage';
 
 // ── Loading spinner ───────────────────────────────────────────────────────────
@@ -39,8 +45,13 @@ function FullPageLoader() {
 // ── Ruta raíz: landing o app ──────────────────────────────────────────────────
 function RootRoute() {
   const { isAuthenticated, isGuest, isLoading } = useAuth();
+  
   if (isLoading) return <FullPageLoader />;
-  if (isAuthenticated || isGuest) return <Navigate to="/calculadora" replace />;
+  
+  if (isAuthenticated || isGuest) {
+    return <Navigate to="/calculadora" replace />;
+  }
+  
   return <HomePage />;
 }
 
@@ -55,6 +66,27 @@ function ProtectedRoute({ children }: { children: React.ReactNode }) {
 // ── Routing ───────────────────────────────────────────────────────────────────
 function AppRoutes() {
   const { accepted, accept } = useCookieConsent();
+  const chatBotRef = useRef<ChatBotHandle>(null);
+
+  const handleOpenChatbotInContact = () => {
+    chatBotRef.current?.openInContactView();
+  };
+
+  const handleOpenChatbotInHelp = () => {
+    chatBotRef.current?.openInHelpView();
+  };
+
+  useEffect(() => {
+    const openChatbotContact = () => {
+      chatBotRef.current?.openInContactView();
+    };
+
+    window.addEventListener('open-chatbot-contact', openChatbotContact);
+
+    return () => {
+      window.removeEventListener('open-chatbot-contact', openChatbotContact);
+    };
+  }, []);
 
   return (
     <>
@@ -63,11 +95,20 @@ function AppRoutes() {
 
         {/* Login page — accesible sin autenticación */}
         <Route path="/login" element={<LoginPage />} />
+        
+        {/* Páginas legales e información — accesibles sin autenticación */}
+        <Route path="/politica-privacidad" element={<PoliticaPrivacidadPage />} />
+        <Route path="/cookies" element={<CookiesPage />} />
+        <Route path="/terminos" element={<TerminosPage />} />
+        <Route path="/acerca" element={<AcercaPage />} />
 
         <Route
           element={
             <ProtectedRoute>
-              <AppLayout />
+              <AppLayout 
+                onOpenChatbot={handleOpenChatbotInContact}
+                onOpenChatbotHelp={handleOpenChatbotInHelp}
+              />
             </ProtectedRoute>
           }
         >
@@ -84,6 +125,7 @@ function AppRoutes() {
           <Route path="/estadisticas" element={<EstadisticasPage />} />
           <Route path="/inventario"   element={<InventarioPage />} />
           <Route path="/recursos"     element={<RecursosPage />} />
+          <Route path="/ajustes"      element={<SettingsPage />} />
         </Route>
 
         {/* Panel privado — fuera del AppLayout y del ProtectedRoute */}
@@ -93,7 +135,7 @@ function AppRoutes() {
       </Routes>
 
       {!accepted && <CookieBanner onAccept={accept} />}
-      <ChatBotBobina />
+      <ChatBotBobina ref={chatBotRef} />
       <IosInstallBanner />
     </>
   );

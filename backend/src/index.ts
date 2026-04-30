@@ -95,7 +95,10 @@ db.exec(`
     email         TEXT,
     name          TEXT,
     photo         TEXT,
-    password_hash TEXT
+    password_hash TEXT,
+    pref_date_format    TEXT DEFAULT 'dd-mm-yyyy',
+    pref_length_unit    TEXT DEFAULT 'mm',
+    pref_weight_unit    TEXT DEFAULT 'g'
   );
   CREATE TABLE IF NOT EXISTS projects (
     id         TEXT PRIMARY KEY,
@@ -279,6 +282,17 @@ db.exec(`
   ON users(email)
   WHERE email IS NOT NULL
 `);
+
+// ── Preferencias de usuario ──────────────────────────────────────────────────
+if (!userColNames.has('pref_date_format')) {
+  db.exec("ALTER TABLE users ADD COLUMN pref_date_format TEXT DEFAULT 'dd-mm-yyyy'");
+}
+if (!userColNames.has('pref_length_unit')) {
+  db.exec("ALTER TABLE users ADD COLUMN pref_length_unit TEXT DEFAULT 'mm'");
+}
+if (!userColNames.has('pref_weight_unit')) {
+  db.exec("ALTER TABLE users ADD COLUMN pref_weight_unit TEXT DEFAULT 'g'");
+}
 
 db.prepare('DELETE FROM sessions WHERE expires_at <= ?').run(Date.now());
 
@@ -574,6 +588,9 @@ interface DbUser {
   photo: string | null;
   password_hash: string | null;
   email_verified: number;
+  pref_date_format?: string;
+  pref_length_unit?: string;
+  pref_weight_unit?: string;
 }
 
 class SQLiteSessionStore extends session.Store {
@@ -716,6 +733,35 @@ const uploadLogo = multer({
     } else {
       // Rechazar el archivo con un error
       cb(new Error('Solo se permiten imágenes PNG, JPG o SVG'));
+    }
+  },
+});
+
+// Configuración de multer para fotos de perfil
+const profilePhotoStorage = multer.diskStorage({
+  destination: (_req, _file, cb) => {
+    const uploadsDir = path.resolve(__dirname, '../uploads/profile-photos');
+    if (!fs.existsSync(uploadsDir)) {
+      fs.mkdirSync(uploadsDir, { recursive: true });
+    }
+    cb(null, uploadsDir);
+  },
+  filename: (req, file, cb) => {
+    const user = req.user as DbUser;
+    const ext = path.extname(file.originalname);
+    cb(null, `${user.id}-${Date.now()}${ext}`);
+  },
+});
+
+const uploadProfilePhoto = multer({
+  storage: profilePhotoStorage,
+  limits: { fileSize: 10 * 1024 * 1024 }, // 10 MB max
+  fileFilter: (_req, file, cb) => {
+    const allowedTypes = ['image/png', 'image/jpeg', 'image/jpg', 'image/webp'];
+    if (allowedTypes.includes(file.mimetype)) {
+      cb(null, true);
+    } else {
+      cb(new Error('Solo se permiten imágenes PNG, JPG o WebP'));
     }
   },
 });
@@ -1082,6 +1128,99 @@ app.delete('/api/user', requireAuth, (req, res) => {
       res.json({ success: true });
     });
   });
+});
+
+/** GET /api/user/preferences — obtener preferencias del usuario */
+app.get('/api/user/preferences', requireAuth, (req, res) => {
+  const user = req.user as DbUser;
+  const prefs = db.prepare(`
+    SELECT 
+      pref_date_format as dateFormat,
+      pref_length_unit as lengthUnit,
+      pref_weight_unit as weightUnit
+    FROM users WHERE id=?
+  `).get(user.id) as {
+    dateFormat: string;
+    lengthUnit: string;
+    weightUnit: string;
+  } | undefined;
+
+  if (!prefs) { res.status(404).json({ error: 'Usuario no encontrado.' }); return; }
+
+  res.json({
+    dateFormat: prefs.dateFormat,
+    lengthUnit: prefs.lengthUnit,
+    weightUnit: prefs.weightUnit,
+  });
+});
+
+/** PUT /api/user/preferences — actualizar preferencias del usuario */
+app.put('/api/user/preferences', requireAuth, (req, res) => {
+  const user = req.user as DbUser;
+  const { dateFormat, lengthUnit, weightUnit } = req.body as {
+    dateFormat?: string;
+    lengthUnit?: string;
+    weightUnit?: string;
+  };
+
+  // Validaciones básicas
+  const validDateFormats = ['dd-mm-yyyy', 'mm-dd-yyyy', 'yyyy-mm-dd'];
+  const validLengthUnits = ['mm', 'cm', 'in'];
+  const validWeightUnits = ['g', 'kg', 'oz', 'lb'];
+
+  if (dateFormat && !validDateFormats.includes(dateFormat)) {
+    res.status(400).json({ error: 'Formato de fecha inválido.' }); return;
+  }
+  if (lengthUnit && !validLengthUnits.includes(lengthUnit)) {
+    res.status(400).json({ error: 'Unidad de longitud inválida.' }); return;
+  }
+  if (weightUnit && !validWeightUnits.includes(weightUnit)) {
+    res.status(400).json({ error: 'Unidad de peso inválida.' }); return;
+  }
+
+  // Construir UPDATE dinámico solo con los campos enviados
+  const updates: string[] = [];
+  const values: (string | number)[] = [];
+
+  if (dateFormat !== undefined) { updates.push('pref_date_format=?'); values.push(dateFormat); }
+  if (lengthUnit !== undefined) { updates.push('pref_length_unit=?'); values.push(lengthUnit); }
+  if (weightUnit !== undefined) { updates.push('pref_weight_unit=?'); values.push(weightUnit); }
+
+  if (updates.length === 0) { res.status(400).json({ error: 'No hay preferencias para actualizar.' }); return; }
+
+  values.push(user.id);
+  db.prepare(`UPDATE users SET ${updates.join(', ')} WHERE id=?`).run(...values);
+
+  res.json({ success: true });
+});
+
+/** POST /api/user/photo — subir foto de perfil */
+app.post('/api/user/photo', requireAuth, uploadProfilePhoto.single('photo'), (req, res) => {
+  const user = req.user as DbUser;
+  
+  if (!req.file) {
+    res.status(400).json({ error: 'No se envió ninguna imagen.' });
+    return;
+  }
+
+  // Eliminar foto anterior si existe y no es de Google
+  const currentUser = db.prepare('SELECT photo, google_id FROM users WHERE id=?').get(user.id) as { photo: string | null; google_id: string | null } | undefined;
+  if (currentUser?.photo && !currentUser.google_id) {
+    const oldPhotoPath = path.resolve(__dirname, '..', currentUser.photo);
+    if (fs.existsSync(oldPhotoPath)) {
+      try {
+        fs.unlinkSync(oldPhotoPath);
+      } catch {
+        // Ignorar errores al eliminar foto anterior
+      }
+    }
+  }
+
+  // Guardar ruta relativa de la nueva foto
+  const photoPath = `/uploads/profile-photos/${req.file.filename}`;
+  db.prepare('UPDATE users SET photo=? WHERE id=?').run(photoPath, user.id);
+
+  res.json({ success: true, photo: photoPath });
 });
 
 // ── Proyectos ─────────────────────────────────────────────────────────────────
@@ -2070,6 +2209,7 @@ import { generatePdf, generatePdfHtml, generateTrackerPdf, generateTrackerPdfHtm
 
 // Servir logos estáticos
 app.use('/uploads/logos', express.static(path.resolve(__dirname, '../uploads/logos')));
+app.use('/uploads/profile-photos', express.static(path.resolve(__dirname, '../uploads/profile-photos')));
 
 // GET /api/pdf/config - Obtener configuración del usuario
 app.get('/api/pdf/config', requireAuth, (req, res) => {

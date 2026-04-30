@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
 import { Github, Youtube, Instagram, Mail, Loader2, Check, ArrowLeft, RefreshCw, Eye, EyeOff } from 'lucide-react';
 import { GoogleIcon, TikTokIcon } from '@/components/icons';
@@ -68,6 +69,7 @@ export function LoginPage() {
   const { loginWithGoogle, loginWithEmail, register, authLoading } = useAuth();
   const { t } = useTranslation();
   const { resolvedTheme } = useTheme();
+  const navigate = useNavigate();
   const currentYear = new Date().getFullYear();
 
   // Leer params de la URL al cargar
@@ -133,7 +135,8 @@ export function LoginPage() {
     setSubmitting(true);
     try {
       await loginWithEmail(email, password);
-      window.location.reload();
+      // Redirigir a calculadora después del login
+      navigate('/calculadora', { replace: true });
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : t('login_error_invalid');
       if (msg.toLowerCase().includes('google')) setError(t('login_google_only'));
@@ -298,8 +301,8 @@ export function LoginPage() {
           <h2 className="text-xl font-extrabold text-foreground">¡Contraseña actualizada!</h2>
           <p className="mt-1 text-sm text-muted-foreground">Ya puedes iniciar sesión con tu nueva contraseña.</p>
         </div>
-        <Button className="w-full rounded-2xl font-bold" size="lg" onClick={() => { window.location.reload(); }}>
-          Entrar a FilamentOS
+        <Button className="w-full rounded-2xl font-bold" size="lg" onClick={() => goTo('email-login')}>
+          Iniciar sesión
         </Button>
       </div>
     );

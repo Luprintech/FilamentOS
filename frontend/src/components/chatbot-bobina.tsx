@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useImperativeHandle, forwardRef, useEffect } from 'react';
 import {
   X,
   Search,
@@ -76,13 +76,42 @@ function useContextualWelcome() {
   return t('chatbot_welcome');
 }
 
-export function ChatBotBobina() {
+export interface ChatBotHandle {
+  openInContactView: () => void;
+  openInHelpView: () => void;
+}
+
+export const ChatBotBobina = forwardRef<ChatBotHandle>((props, ref) => {
   const { t, i18n } = useTranslation();
   const { toast } = useToast();
   const { user, isAuthenticated, goToLogin } = useAuth();
   const welcomeMessage = useContextualWelcome();
   const [isOpen, setIsOpen] = useState(false);
   const [view, setView] = useState<View>('categories');
+  const [pendingContactOpen, setPendingContactOpen] = useState(false);
+  const [pendingHelpOpen, setPendingHelpOpen] = useState(false);
+
+  useImperativeHandle(ref, () => ({
+    openInContactView: () => {
+      setPendingContactOpen(true);
+      setIsOpen(true);
+    },
+    openInHelpView: () => {
+      setPendingHelpOpen(true);
+      setIsOpen(true);
+    }
+  }));
+
+  useEffect(() => {
+    if (pendingContactOpen && isOpen) {
+      setView('contact');
+      setPendingContactOpen(false);
+    }
+    if (pendingHelpOpen && isOpen) {
+      setView('categories');
+      setPendingHelpOpen(false);
+    }
+  }, [pendingContactOpen, pendingHelpOpen, isOpen]);
   const [selectedCategory, setSelectedCategory] = useState<FAQCategory | null>(null);
   const [selectedQuestion, setSelectedQuestion] = useState<FAQ | null>(null);
   const [searchTerm, setSearchTerm] = useState('');
@@ -678,4 +707,4 @@ export function ChatBotBobina() {
       `}</style>
     </>
   );
-}
+});
