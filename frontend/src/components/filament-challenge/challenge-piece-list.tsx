@@ -1,10 +1,11 @@
-import React, { useMemo, useState } from 'react';
+import React, { useMemo, useRef, useState } from 'react';
 import { Button } from '@/components/ui/button';
 import {
   GridDensityControl,
   GRID_DENSITY_OPTIONS,
   getGridActionMode,
   getGridColumnsVars,
+  useGridPageSize,
   type GridActionMode,
   type GridDensity,
 } from '@/components/grid-density-control';
@@ -165,10 +166,10 @@ export function ChallengePieceList({
   const [search, setSearch] = useState('');
   const [page, setPage] = useState(1);
   const [gridDensity, setGridDensity] = useState<GridDensity>(loadGridDensity);
+  const gridRef = useRef<HTMLDivElement>(null);
 
-  const PAGE_SIZE_GRID = 6;
   const PAGE_SIZE_LIST = 9;
-  const pageSize = viewMode === 'grid' ? PAGE_SIZE_GRID : PAGE_SIZE_LIST;
+  const pageSize = useGridPageSize(gridRef, gridDensity, viewMode, PAGE_SIZE_LIST);
 
   const sorted = sortPieces(pieces, sortMode);
   const trimmed = search.trim().toLowerCase();
@@ -318,7 +319,7 @@ export function ChallengePieceList({
   }
 
   return (
-    <div className="flex flex-col gap-3">
+    <div ref={gridRef} className="flex flex-col gap-3">
 
       {/* ── Header block ──────────────────────────────────────────────────── */}
       <div className="rounded-[20px] border border-white/[0.08] bg-white/[0.03] p-4 space-y-3">

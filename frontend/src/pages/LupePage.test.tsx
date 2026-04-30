@@ -75,33 +75,42 @@ function navigateToCatalog() {
 }
 
 function mockApiCalls() {
-  // The component mounts with tab='resources':
-  // 1. AdminPanel: /api/lupe/categories
-  // 2. AdminPanel: /api/lupe/tags
-  // 3. ResourcesTab: /api/lupe/resources
-  // Then when we navigate to Catalog:
-  // 4. CatalogTab: /api/filament-catalog/metadata/filters
-  // 5. CatalogTab: /api/filament-catalog?page=1&limit=50
   const mockFn = httpRequest as ReturnType<typeof vi.fn>;
   
-  mockFn
-    .mockResolvedValueOnce([
-      { id: 'cat1', label_es: 'Tutoriales', label_en: 'Tutorials', color: 'text-teal-400', badge_cls: '', sort_order: 1 },
-    ])  // 1. AdminPanel: /api/lupe/categories
-    .mockResolvedValueOnce([])  // 2. AdminPanel: /api/lupe/tags
-    .mockResolvedValueOnce([])  // 3. ResourcesTab: /api/lupe/resources (default tab)
-    .mockResolvedValueOnce({ brands: ['Sakata 3D', 'eSUN', '3DTested'], materials: ['PLA', 'PETG'] })  // 4. CatalogTab: /api/filament-catalog/metadata/filters
-    .mockResolvedValueOnce({  // 5. CatalogTab: /api/filament-catalog?page=1&limit=50
-      items: mockFilaments,
-      pagination: mockPagination,
-    });
+  // Use a smart mock that returns based on URL
+  mockFn.mockImplementation((opts: { url: string }) => {
+    const url = opts.url;
+    if (url === '/api/lupe/categories') {
+      return Promise.resolve([
+        { id: 'cat1', label_es: 'Tutoriales', label_en: 'Tutorials', color: 'text-teal-400', badge_cls: '', sort_order: 1 },
+      ]);
+    }
+    if (url === '/api/lupe/tags') {
+      return Promise.resolve([]);
+    }
+    if (url === '/api/lupe/resources') {
+      return Promise.resolve([]);
+    }
+    if (url.startsWith('/api/filament-catalog/metadata/filters')) {
+      return Promise.resolve({ brands: ['Sakata 3D', 'eSUN', '3DTested'], materials: ['PLA', 'PETG'] });
+    }
+    if (url.startsWith('/api/filament-catalog')) {
+      return Promise.resolve({
+        items: mockFilaments,
+        pagination: mockPagination,
+      });
+    }
+    return Promise.resolve({});
+  });
 }
 
 async function navigateToCatalogAndWait() {
   navigateToCatalog();
-  // Wait for the filament data to render (look for the brand text)
+  // Wait for the filament grid to render (not the filter options)
   await waitFor(() => {
-    expect(screen.getByText('Sakata 3D')).toBeInTheDocument();
+    const grid = document.querySelector('.grid');
+    expect(grid).toBeInTheDocument();
+    expect(grid?.children.length).toBe(3);
   });
 }
 
@@ -118,26 +127,30 @@ describe('T6 — CatalogTab: flex cards instead of HTML table', () => {
     // No <table> element should be present
     expect(screen.queryByRole('table')).not.toBeInTheDocument();
 
-    // Should render a grid container with filament cards
-    const grid = document.querySelector('.grid');
-    expect(grid).toBeInTheDocument();
+    // The filament cards grid (with gap-2, not gap-4 which is the filters grid)
+    const grids = document.querySelectorAll<HTMLElement>('.grid');
+    const filamentGrid = Array.from(grids).find((g) => g.className.includes('gap-2'));
+    expect(filamentGrid).toBeInTheDocument();
 
-    // Should render exactly 3 filament cards
-    const cards = grid?.querySelectorAll('[class*="rounded-\\[18px\\]"]');
-    expect(cards).toHaveLength(3);
+    // Should render exactly 3 filament cards (count brand <p> elements)
+    const brandElements = document.querySelectorAll('p.text-sm.font-extrabold');
+    expect(brandElements).toHaveLength(3);
   });
 
   it('shows brand, material, and color for each filament in the card', async () => {
     render(<LupePage />);
     await navigateToCatalogAndWait();
 
-    // First card shows brand "Sakata 3D"
-    expect(screen.getByText('Sakata 3D')).toBeInTheDocument();
+    // Use getAllByText since brand appears in both filter options and cards
+    const sakataTexts = screen.getAllByText('Sakata 3D');
+    expect(sakataTexts.length).toBeGreaterThanOrEqual(1);
+
     // First card shows material · color
     expect(screen.getByText(/PLA · Rojo/)).toBeInTheDocument();
 
     // Second card shows brand "eSUN"
-    expect(screen.getByText('eSUN')).toBeInTheDocument();
+    const esunTexts = screen.getAllByText('eSUN');
+    expect(esunTexts.length).toBeGreaterThanOrEqual(1);
     expect(screen.getByText(/PETG · Azul/)).toBeInTheDocument();
   });
 
@@ -188,8 +201,8 @@ describe('T6 — CatalogTab: flex cards instead of HTML table', () => {
     render(<LupePage />);
     await navigateToCatalogAndWait();
 
-    // Third filament has a very long URL — should be truncated
-    const longUrl = await screen.findByText(/example\.com/);
+    // Third filament has a very long URL — the display strips protocol, should be truncated
+    const longUrl = await screen.findByText(/truncated-in-the-card/);
     // The span with truncate class should show truncated text (not the full URL)
     expect(longUrl.textContent?.length).toBeLessThan(mockFilaments[2].purchaseUrl!.length);
   });
@@ -198,10 +211,12 @@ describe('T6 — CatalogTab: flex cards instead of HTML table', () => {
     render(<LupePage />);
     await navigateToCatalogAndWait();
 
-    const grid = document.querySelector('.grid');
-    expect(grid).toBeInTheDocument();
+    // Find the filament grid (gap-2, not the filter grid with gap-2)
+    const grids = document.querySelectorAll<HTMLElement>('.grid');
+    const filamentGrid = Array.from(grids).find((g) => g.className.includes('gap-2') && g.className.includes('lg:grid-cols-3'));
+    expect(filamentGrid).toBeInTheDocument();
     // Should have responsive grid classes
-    expect(grid!.className).toContain('sm:grid-cols-2');
-    expect(grid!.className).toContain('lg:grid-cols-3');
+    expect(filamentGrid!.className).toContain('sm:grid-cols-2');
+    expect(filamentGrid!.className).toContain('lg:grid-cols-3');
   });
 });

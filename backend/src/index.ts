@@ -1553,6 +1553,11 @@ interface MaterialInput {
 
 app.get('/api/tracker/projects/:projectId/pieces', requireAuth, (req, res) => {
   const user = req.user as DbUser;
+  const projectRow = db
+    .prepare('SELECT price_per_kg FROM tracker_projects WHERE id=? AND user_id=?')
+    .get(req.params.projectId, user.id) as { price_per_kg: number } | undefined;
+  const fallbackPricePerKg = projectRow?.price_per_kg ?? 0;
+
   const rows = db
     .prepare('SELECT * FROM tracker_pieces WHERE project_id=? AND user_id=? ORDER BY order_index ASC, created_at ASC')
     .all(req.params.projectId, user.id) as {
@@ -1565,7 +1570,13 @@ app.get('/api/tracker/projects/:projectId/pieces', requireAuth, (req, res) => {
   const pieces = rows.map((r) => ({
     id: r.id, projectId: r.project_id, orderIndex: r.order_index, label: r.label, name: r.name,
     timeText: r.time_text, gramText: r.gram_text,
-    totalSecs: r.total_secs, totalGrams: r.total_grams, totalCost: r.total_cost,
+    totalSecs: r.total_secs,
+    totalGrams: r.total_grams,
+    totalCost: r.total_cost > 0
+      ? r.total_cost
+      : r.total_grams > 0 && fallbackPricePerKg > 0
+        ? parseFloat(((r.total_grams * fallbackPricePerKg) / 1000).toFixed(4))
+        : r.total_cost,
     timeLines: r.time_lines, gramLines: r.gram_lines,
     imageUrl: r.image_url ?? null,
     notes: r.notes,
