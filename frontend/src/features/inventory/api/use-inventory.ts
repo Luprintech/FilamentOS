@@ -1,9 +1,10 @@
 import { useState, useCallback, useEffect } from 'react';
 import {
   apiGetSpools, apiCreateSpool, apiUpdateSpool, apiDeleteSpool,
-  apiDeductSpool, apiFinishSpool, apiGetCustomOptions, InventoryApiError,
+  apiDeductSpool, apiFinishSpool, apiGetCustomOptions, apiGetFilamentCatalog,
+  apiImportSpoolFromCatalog, apiLinkSpoolToCatalog, InventoryApiError,
 } from './inventory-api';
-import type { Spool, SpoolInput } from '../types';
+import type { FilamentCatalogItem, Spool, SpoolInput } from '../types';
 
 export interface UseInventoryOptions {
   authLoading: boolean;
@@ -14,6 +15,8 @@ export function useInventory({ authLoading, userId }: UseInventoryOptions) {
   const [spools, setSpools] = useState<Spool[]>([]);
   const [customBrands, setCustomBrands] = useState<string[]>([]);
   const [customMaterials, setCustomMaterials] = useState<string[]>([]);
+  const [catalogItems, setCatalogItems] = useState<FilamentCatalogItem[]>([]);
+  const [catalogAttribution, setCatalogAttribution] = useState('');
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<InventoryApiError | Error | null>(null);
 
@@ -41,6 +44,13 @@ export function useInventory({ authLoading, userId }: UseInventoryOptions) {
     } catch (e) {
       setError(e as InventoryApiError | Error);
     }
+  }, [userId]);
+
+  const refreshCatalog = useCallback(async () => {
+    if (!userId) return;
+    const data = await apiGetFilamentCatalog();
+    setCatalogItems(data.items);
+    setCatalogAttribution(data.attribution);
   }, [userId]);
 
   useEffect(() => {
@@ -113,17 +123,42 @@ export function useInventory({ authLoading, userId }: UseInventoryOptions) {
     );
   }, [userId]);
 
+  const importSpoolFromCatalog = useCallback(async (input: {
+    catalogFilamentId: string;
+    totalGrams: number;
+    remainingG: number;
+    price: number;
+  }) => {
+    if (!userId) throw new Error('Not authenticated');
+    const spool = await apiImportSpoolFromCatalog(input);
+    setSpools((prev) => [spool, ...prev]);
+    void refreshCustomOptions();
+    return spool;
+  }, [userId, refreshCustomOptions]);
+
+  const linkSpoolToCatalog = useCallback(async (spoolId: string, catalogFilamentId: string) => {
+    if (!userId) throw new Error('Not authenticated');
+    const updated = await apiLinkSpoolToCatalog(spoolId, catalogFilamentId);
+    setSpools((prev) => prev.map((s) => (s.id === spoolId ? updated : s)));
+    return updated;
+  }, [userId]);
+
   return {
     spools,
     customBrands,
     customMaterials,
+    catalogItems,
+    catalogAttribution,
     loading,
     error,
     refresh,
+    refreshCatalog,
     createSpool,
     updateSpool,
     deleteSpool,
     deductSpool,
     finishSpool,
+    importSpoolFromCatalog,
+    linkSpoolToCatalog,
   };
 }

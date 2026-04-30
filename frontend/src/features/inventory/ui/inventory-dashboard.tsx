@@ -1,6 +1,7 @@
 import React, { useState, useMemo, useRef, useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Package, Plus, AlertTriangle, ScanLine } from 'lucide-react';
+import { Link } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
 import { PaginationBar } from '@/components/ui/pagination-bar';
 import { Skeleton } from '@/components/ui/skeleton';
@@ -194,6 +195,11 @@ export function InventoryDashboard({ userId, authLoading }: InventoryDashboardPr
           <Plus className="mr-1.5 h-4 w-4" />
           {t('inventory.addSpool')}
         </Button>
+        <Link to="/filamentos/globales">
+          <Button variant="outline" className="rounded-full font-bold">
+            Base global
+          </Button>
+        </Link>
       </div>
 
       {/* Metrics */}

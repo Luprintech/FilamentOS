@@ -27,6 +27,8 @@ beforeAll(() => {
 });
 
 beforeEach(() => {
+  db.prepare('DELETE FROM filament_catalog').run();
+  db.prepare('DELETE FROM filament_catalog_sync_state').run();
   db.prepare('DELETE FROM filament_inventory').run();
   db.prepare('DELETE FROM user_custom_spool_options').run();
   db.prepare('DELETE FROM filamentos_comunidad').run();
@@ -229,5 +231,156 @@ describe('DELETE /api/inventory/spools/:id', () => {
 
   it('devuelve 404 si el id no existe', async () => {
     await agent.delete('/api/inventory/spools/no-existe').expect(404);
+  });
+});
+
+describe('global filament catalog', () => {
+  it('returns cached catalog items for authenticated users', async () => {
+    db.prepare(
+      `INSERT INTO filament_catalog
+        (id, source, external_id, slug, brand, material, color, color_hex, finish, image_url, purchase_url, metadata_json, last_seen_at, last_synced_at, updated_at)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+    ).run(
+      'filamentcolors:1',
+      'filamentcolors',
+      '1',
+      'bambu-lab-jade-white-1',
+      'Bambu Lab',
+      'PLA',
+      'Jade White',
+      '#F2F2EE',
+      'matte',
+      'https://filamentcolors.xyz/media/jade-white.jpg',
+      null,
+      JSON.stringify({ td: 1.2 }),
+      '2026-04-30T00:00:00.000Z',
+      '2026-04-30T00:00:00.000Z',
+      '2026-04-30T00:00:00.000Z'
+    );
+
+    const res = await agent.get('/api/filament-catalog').expect(200);
+
+    expect(res.body.items).toHaveLength(1);
+    expect(res.body.items[0]).toMatchObject({
+      id: 'filamentcolors:1',
+      brand: 'Bambu Lab',
+      material: 'PLA',
+      color: 'Jade White',
+      colorHex: '#F2F2EE',
+    });
+    expect(res.body.attribution).toContain('FilamentColors');
+  });
+
+  it('returns item detail', async () => {
+    db.prepare(
+      `INSERT INTO filament_catalog
+        (id, source, external_id, slug, brand, material, color, color_hex, finish, image_url, purchase_url, metadata_json, last_seen_at, last_synced_at, updated_at)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+    ).run(
+      'filamentcolors:2',
+      'filamentcolors',
+      '2',
+      'prusament-galaxy-black-2',
+      'Prusament',
+      'PETG',
+      'Galaxy Black',
+      '#222222',
+      null,
+      null,
+      'https://example.com/buy',
+      '{}',
+      '2026-04-30T00:00:00.000Z',
+      '2026-04-30T00:00:00.000Z',
+      '2026-04-30T00:00:00.000Z'
+    );
+
+    const res = await agent.get('/api/filament-catalog/filamentcolors:2').expect(200);
+    expect(res.body.id).toBe('filamentcolors:2');
+    expect(res.body.purchaseUrl).toBe('https://example.com/buy');
+  });
+
+  it('allows admin to sync manually', async () => {
+    await request(app).post('/api/lupe/login').send({ user: 'lupe', pass: '' }).expect(503);
+  });
+});
+
+describe('inventory catalog linking', () => {
+  it('imports a local spool from catalog', async () => {
+    db.prepare(
+      `INSERT INTO filament_catalog
+        (id, source, external_id, slug, brand, material, color, color_hex, finish, image_url, purchase_url, metadata_json, last_seen_at, last_synced_at, updated_at)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+    ).run(
+      'filamentcolors:3',
+      'filamentcolors',
+      '3',
+      'sunlu-forest-green-3',
+      'Sunlu',
+      'PLA',
+      'Forest Green',
+      '#228B22',
+      null,
+      null,
+      null,
+      JSON.stringify({ td: 0.8 }),
+      '2026-04-30T00:00:00.000Z',
+      '2026-04-30T00:00:00.000Z',
+      '2026-04-30T00:00:00.000Z'
+    );
+
+    const res = await agent
+      .post('/api/inventory/spools/import-from-catalog')
+      .send({ catalogFilamentId: 'filamentcolors:3', totalGrams: 1000, remainingG: 1000, price: 20 })
+      .expect(200);
+
+    expect(res.body).toMatchObject({
+      brand: 'Sunlu',
+      color: 'Forest Green',
+      inventorySource: 'catalog_import',
+      catalogFilamentId: 'filamentcolors:3',
+    });
+  });
+
+  it('links an existing spool to catalog without changing local identity', async () => {
+    db.prepare(
+      `INSERT INTO filament_catalog
+        (id, source, external_id, slug, brand, material, color, color_hex, finish, image_url, purchase_url, metadata_json, last_seen_at, last_synced_at, updated_at)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+    ).run(
+      'filamentcolors:4',
+      'filamentcolors',
+      '4',
+      'polymaker-nebula-purple-4',
+      'Polymaker',
+      'PLA',
+      'Nebula Purple',
+      '#663399',
+      null,
+      null,
+      null,
+      '{}',
+      '2026-04-30T00:00:00.000Z',
+      '2026-04-30T00:00:00.000Z',
+      '2026-04-30T00:00:00.000Z'
+    );
+
+    const createRes = await agent.post('/api/inventory/spools').send({
+      brand: 'Polymaker',
+      material: 'PLA',
+      color: 'Purple',
+      totalGrams: 1000,
+      remainingG: 900,
+      price: 28,
+    });
+
+    const linked = await agent
+      .post(`/api/inventory/spools/${createRes.body.id}/link-catalog`)
+      .send({ catalogFilamentId: 'filamentcolors:4' })
+      .expect(200);
+
+    expect(linked.body.id).toBe(createRes.body.id);
+    expect(linked.body.inventorySource).toBe('catalog_link');
+    expect(linked.body.catalogFilamentId).toBe('filamentcolors:4');
+    expect(linked.body.remainingG).toBe(900);
   });
 });

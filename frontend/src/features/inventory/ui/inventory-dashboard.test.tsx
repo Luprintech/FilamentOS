@@ -1,6 +1,7 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, screen, fireEvent, waitFor } from '@testing-library/react';
-import type { Spool, SpoolmanStatus } from '../types';
+import { MemoryRouter } from 'react-router-dom';
+import type { Spool } from '../types';
 
 vi.mock('react-i18next', () => ({
   useTranslation: () => ({
@@ -129,6 +130,14 @@ vi.mock('@/components/ui/skeleton', () => ({
 
 import { InventoryDashboard } from './inventory-dashboard';
 
+function renderDashboard() {
+  return render(
+    <MemoryRouter>
+      <InventoryDashboard userId="user-1" authLoading={false} />
+    </MemoryRouter>
+  );
+}
+
 function createSpool(overrides: Partial<Spool> = {}): Spool {
   return {
     id: overrides.id ?? 'spool-1',
@@ -144,6 +153,7 @@ function createSpool(overrides: Partial<Spool> = {}): Spool {
     inventorySource: overrides.inventorySource ?? 'local',
     linkedAt: overrides.linkedAt ?? null,
     lastSyncedAt: overrides.lastSyncedAt ?? null,
+    catalogFilamentId: overrides.catalogFilamentId ?? null,
     status: overrides.status ?? 'active',
     createdAt: overrides.createdAt ?? '2026-04-28T00:00:00Z',
     updatedAt: overrides.updatedAt ?? '2026-04-28T00:00:00Z',
@@ -176,59 +186,53 @@ describe('InventoryDashboard', () => {
     error: null,
     customBrands: [],
     customMaterials: [],
+    catalogItems: [],
+    catalogAttribution: '',
+    refresh: vi.fn(),
+    refreshCatalog: vi.fn(),
     createSpool: vi.fn(),
     updateSpool: vi.fn(),
     deleteSpool: vi.fn(),
     deductSpool: vi.fn(),
     finishSpool: vi.fn(),
-    syncSpoolman: vi.fn(),
-    getRemoteSpool: vi.fn(),
-    linkSpoolman: vi.fn(),
+    importSpoolFromCatalog: vi.fn(),
+    linkSpoolToCatalog: vi.fn(),
   };
 
-  it('oculta cualquier banner visible de Spoolman aunque exista estado remoto', () => {
-    const degradedStatus: SpoolmanStatus = {
-      configured: true,
-      endpoint: 'https://spoolman.local/api/v1',
-      state: 'degraded',
-      error: 'offline',
-    };
-
+  it('renderiza el inventario sin mostrar integraciones eliminadas', () => {
     mockUseInventory.mockReturnValue({
       ...defaultReturn,
       spools: [createSpool()],
       loading: false,
       error: null,
-      spoolmanStatus: degradedStatus,
     });
 
-    render(<InventoryDashboard userId="user-1" authLoading={false} />);
+    renderDashboard();
 
+    expect(screen.getByText('Local spool')).toBeInTheDocument();
     expect(screen.queryByText(/Spoolman/i)).not.toBeInTheDocument();
   });
 
-  it('mantiene la edición normal del inventario aunque exista estado de Spoolman', () => {
+  it('mantiene la edición normal del inventario', () => {
     const localSpool = createSpool();
     mockUseInventory.mockReturnValue({
       ...defaultReturn,
       spools: [localSpool],
       loading: false,
       error: null,
-      spoolmanStatus: {
-        configured: true,
-        endpoint: 'https://spoolman.local/api/v1',
-        state: 'connected',
-        error: null,
-      } satisfies SpoolmanStatus,
     });
 
-    render(<InventoryDashboard userId="user-1" authLoading={false} />);
+    renderDashboard();
 
     fireEvent.click(screen.getByRole('button', { name: 'Editar Local spool' }));
 
     expect(screen.getByText('SpoolForm:open')).toBeInTheDocument();
     expect(screen.queryByText(/Spoolman/i)).not.toBeInTheDocument();
   });
+
+  it('pagina, elimina, escanea y crea nuevas bobinas', async () => {
+    const deleteSpool = vi.fn().mockResolvedValue(undefined);
+    const createSpoolMock = vi.fn().mockResolvedValue(undefined);
     const spools = Array.from({ length: 5 }, (_, index) =>
       createSpool({
         id: `spool-${index + 1}`,
@@ -243,10 +247,10 @@ describe('InventoryDashboard', () => {
       loading: false,
       error: null,
       deleteSpool,
-      createSpool,
+      createSpool: createSpoolMock,
     });
 
-    render(<InventoryDashboard userId="user-1" authLoading={false} />);
+    renderDashboard();
 
     expect(screen.getByText('Tenés 1 bobinas con stock bajo.')).toBeInTheDocument();
     expect(screen.getByText('Mostrando 1-4 de 5 bobinas')).toBeInTheDocument();
@@ -267,6 +271,6 @@ describe('InventoryDashboard', () => {
     expect(screen.getByText('Prefill:Scanned spool')).toBeInTheDocument();
 
     fireEvent.click(screen.getByRole('button', { name: 'Enviar formulario' }));
-    await waitFor(() => expect(createSpool).toHaveBeenCalledWith({ brand: 'Created from test' }));
+    await waitFor(() => expect(createSpoolMock).toHaveBeenCalledWith({ brand: 'Created from test' }));
   });
 });

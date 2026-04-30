@@ -1,5 +1,5 @@
 import { httpRequest, jsonRequest, HttpClientError } from '@/shared/api/http-client';
-import type { Spool, SpoolInput } from '../types';
+import type { FilamentCatalogItem, Spool, SpoolInput } from '../types';
 
 // ── Error ──────────────────────────────────────────────────────────────────────
 
@@ -61,4 +61,20 @@ export async function apiGetCustomOptions(): Promise<{ brands: string[]; materia
   return apiFetch<{ brands: string[]; materials: string[] }>('/api/inventory/custom-options');
 }
 
+export async function apiGetFilamentCatalog(): Promise<{ items: FilamentCatalogItem[]; attribution: string }> {
+  return apiFetch<{ items: FilamentCatalogItem[]; attribution: string }>('/api/filament-catalog');
+}
+
+export async function apiImportSpoolFromCatalog(input: {
+  catalogFilamentId: string;
+  totalGrams: number;
+  remainingG: number;
+  price: number;
+}): Promise<Spool> {
+  return apiFetch<Spool>('/api/inventory/spools/import-from-catalog', jsonRequest('POST', input));
+}
+
+export async function apiLinkSpoolToCatalog(id: string, catalogFilamentId: string): Promise<Spool> {
+  return apiFetch<Spool>(`/api/inventory/spools/${id}/link-catalog`, jsonRequest('POST', { catalogFilamentId }));
+}
 

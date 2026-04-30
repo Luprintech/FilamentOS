@@ -16,12 +16,15 @@ import { XMLParser } from 'fast-xml-parser';
 import nodemailer from 'nodemailer';
 import dns from 'dns';
 import { promisify } from 'util';
+import { fetchFilamentColorsSwatchesPage, fetchFilamentColorsVersionInfo, mapFilamentColorsSwatchToCatalogRecord } from './filamentcolors-client';
 
 
 dotenv.config();
 
 const PORT = parseInt(process.env.PORT || '3001', 10);
 const CLIENT_ORIGIN = process.env.CLIENT_ORIGIN || 'http://localhost:9002';
+const FEATURE_GLOBAL_FILAMENT_CATALOG = process.env.FEATURE_GLOBAL_FILAMENT_CATALOG !== 'false';
+const FEATURE_FILAMENTCOLORS_SYNC = process.env.FEATURE_FILAMENTCOLORS_SYNC !== 'false';
 // Use || (not ??) so that DB_PATH='' (empty string in .env) also falls back to the default path.
 // With ??, an empty string would be passed to new Database('') which opens a temp SQLite
 // database that is deleted on close — losing all data on every server restart.
@@ -200,9 +203,41 @@ db.exec(`
     price        REAL NOT NULL DEFAULT 0,
     notes        TEXT NOT NULL DEFAULT '',
     shop_url     TEXT,
+    inventory_source TEXT NOT NULL DEFAULT 'local',
+    linked_at    TEXT,
+    last_synced_at TEXT,
+    catalog_filament_id TEXT,
     status       TEXT NOT NULL DEFAULT 'active',
     created_at   TEXT DEFAULT (datetime('now')),
     updated_at   TEXT DEFAULT (datetime('now'))
+  );
+  CREATE TABLE IF NOT EXISTS filament_catalog (
+    id              TEXT PRIMARY KEY,
+    source          TEXT NOT NULL,
+    external_id     TEXT NOT NULL,
+    slug            TEXT NOT NULL,
+    brand           TEXT NOT NULL,
+    material        TEXT NOT NULL,
+    color           TEXT NOT NULL,
+    color_hex       TEXT,
+    finish          TEXT,
+    image_url       TEXT,
+    purchase_url    TEXT,
+    attribution     TEXT NOT NULL DEFAULT 'Data from FilamentColors.xyz (CC BY 4.0)',
+    metadata_json   TEXT NOT NULL DEFAULT '{}',
+    last_seen_at    TEXT NOT NULL,
+    last_synced_at  TEXT NOT NULL,
+    created_at      TEXT DEFAULT (datetime('now')),
+    updated_at      TEXT DEFAULT (datetime('now')),
+    UNIQUE(source, external_id)
+  );
+  CREATE TABLE IF NOT EXISTS filament_catalog_sync_state (
+    provider         TEXT PRIMARY KEY,
+    db_version       INTEGER,
+    db_last_modified TEXT,
+    last_checked_at  TEXT,
+    last_success_at  TEXT,
+    last_error       TEXT
   );
   CREATE TABLE IF NOT EXISTS user_custom_spool_options (
     id      INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -404,6 +439,19 @@ if (inventoryColNames.size > 0) {
   if (!inventoryColNames.has('shop_url')) {
     db.exec("ALTER TABLE filament_inventory ADD COLUMN shop_url TEXT");
   }
+  if (!inventoryColNames.has('inventory_source')) {
+    db.exec("ALTER TABLE filament_inventory ADD COLUMN inventory_source TEXT NOT NULL DEFAULT 'local'");
+  }
+  if (!inventoryColNames.has('linked_at')) {
+    db.exec('ALTER TABLE filament_inventory ADD COLUMN linked_at TEXT');
+  }
+  if (!inventoryColNames.has('last_synced_at')) {
+    db.exec('ALTER TABLE filament_inventory ADD COLUMN last_synced_at TEXT');
+  }
+  if (!inventoryColNames.has('catalog_filament_id')) {
+    db.exec('ALTER TABLE filament_inventory ADD COLUMN catalog_filament_id TEXT');
+  }
+  db.exec("UPDATE filament_inventory SET inventory_source='local' WHERE inventory_source IS NULL OR TRIM(inventory_source) = ''");
 
 }
 
@@ -1878,6 +1926,10 @@ interface DbSpool {
   price: number;
   notes: string;
   shop_url: string | null;
+  inventory_source: string;
+  linked_at: string | null;
+  last_synced_at: string | null;
+  catalog_filament_id: string | null;
   status: string;
   created_at: string;
   updated_at: string;
@@ -1894,9 +1946,31 @@ interface InventorySpoolResponse {
   price: number;
   notes: string;
   shopUrl: string | null;
+  inventorySource: 'local' | 'catalog_import' | 'catalog_link';
+  linkedAt: string | null;
+  lastSyncedAt: string | null;
+  catalogFilamentId: string | null;
   status: 'active' | 'finished';
   createdAt: string;
   updatedAt: string;
+}
+
+interface FilamentCatalogRow {
+  id: string;
+  source: string;
+  external_id: string;
+  slug: string;
+  brand: string;
+  material: string;
+  color: string;
+  color_hex: string | null;
+  finish: string | null;
+  image_url: string | null;
+  purchase_url: string | null;
+  attribution: string;
+  metadata_json: string;
+  last_seen_at: string;
+  last_synced_at: string;
 }
 
 function mapSpool(r: DbSpool) {
@@ -1911,10 +1985,121 @@ function mapSpool(r: DbSpool) {
     price: r.price,
     notes: r.notes,
     shopUrl: r.shop_url ?? null,
+    inventorySource: (r.inventory_source || 'local') as 'local' | 'catalog_import' | 'catalog_link',
+    linkedAt: r.linked_at ?? null,
+    lastSyncedAt: r.last_synced_at ?? null,
+    catalogFilamentId: r.catalog_filament_id ?? null,
     status: r.status as 'active' | 'finished',
     createdAt: r.created_at,
     updatedAt: r.updated_at,
   } satisfies InventorySpoolResponse;
+}
+
+function mapCatalogItem(row: FilamentCatalogRow) {
+  return {
+    id: row.id,
+    source: row.source,
+    externalId: row.external_id,
+    slug: row.slug,
+    brand: row.brand,
+    material: row.material,
+    color: row.color,
+    colorHex: row.color_hex,
+    finish: row.finish,
+    imageUrl: row.image_url,
+    purchaseUrl: row.purchase_url,
+    attribution: row.attribution,
+    metadata: JSON.parse(row.metadata_json || '{}'),
+    lastSeenAt: row.last_seen_at,
+    lastSyncedAt: row.last_synced_at,
+  };
+}
+
+async function syncFilamentCatalogFromFilamentColors() {
+  if (!FEATURE_GLOBAL_FILAMENT_CATALOG || !FEATURE_FILAMENTCOLORS_SYNC) {
+    throw new Error('Filament catalog sync is disabled');
+  }
+
+  const now = new Date().toISOString();
+  db.prepare(
+    `INSERT INTO filament_catalog_sync_state (provider, last_checked_at)
+     VALUES ('filamentcolors', ?)
+     ON CONFLICT(provider) DO UPDATE SET last_checked_at = excluded.last_checked_at`
+  ).run(now);
+
+  const versionInfo = await fetchFilamentColorsVersionInfo();
+  const page = await fetchFilamentColorsSwatchesPage(1, 100);
+  const records = page.results.map(mapFilamentColorsSwatchToCatalogRecord);
+
+  const insert = db.prepare(
+    `INSERT INTO filament_catalog
+      (id, source, external_id, slug, brand, material, color, color_hex, finish, image_url, purchase_url, metadata_json, last_seen_at, last_synced_at, updated_at)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+     ON CONFLICT(id) DO UPDATE SET
+       slug = excluded.slug,
+       brand = excluded.brand,
+       material = excluded.material,
+       color = excluded.color,
+       color_hex = excluded.color_hex,
+       finish = excluded.finish,
+       image_url = excluded.image_url,
+       purchase_url = excluded.purchase_url,
+       metadata_json = excluded.metadata_json,
+       last_seen_at = excluded.last_seen_at,
+       last_synced_at = excluded.last_synced_at,
+       updated_at = excluded.updated_at`
+  );
+
+  for (const record of records) {
+    insert.run(
+      record.id,
+      record.source,
+      record.externalId,
+      record.slug,
+      record.brand,
+      record.material,
+      record.color,
+      record.colorHex,
+      record.finish,
+      record.imageUrl,
+      record.purchaseUrl,
+      record.metadataJson,
+      now,
+      now,
+      now
+    );
+  }
+
+  db.prepare(
+    `INSERT INTO filament_catalog_sync_state (provider, db_version, db_last_modified, last_checked_at, last_success_at, last_error)
+     VALUES ('filamentcolors', ?, ?, ?, ?, NULL)
+     ON CONFLICT(provider) DO UPDATE SET
+       db_version = excluded.db_version,
+       db_last_modified = excluded.db_last_modified,
+       last_checked_at = excluded.last_checked_at,
+       last_success_at = excluded.last_success_at,
+       last_error = NULL`
+  ).run(versionInfo.dbVersion, versionInfo.dbLastModified, now, now);
+
+  return records.length;
+}
+
+async function ensureInitialFilamentCatalogSeed() {
+  const existingCount = (db.prepare('SELECT COUNT(*) as c FROM filament_catalog').get() as { c: number }).c;
+  if (existingCount > 0 || !FEATURE_GLOBAL_FILAMENT_CATALOG || !FEATURE_FILAMENTCOLORS_SYNC) {
+    return;
+  }
+
+  try {
+    await syncFilamentCatalogFromFilamentColors();
+  } catch (error) {
+    const message = error instanceof Error ? error.message : 'Initial filament catalog seed failed';
+    db.prepare(
+      `INSERT INTO filament_catalog_sync_state (provider, last_error)
+       VALUES ('filamentcolors', ?)
+       ON CONFLICT(provider) DO UPDATE SET last_error = excluded.last_error`
+    ).run(message);
+  }
 }
 
 function assertPositiveInteger(value: unknown): number | null {
@@ -1960,6 +2145,49 @@ app.get('/api/inventory/spools', requireAuth, (req, res) => {
   res.json(rows.map(mapSpool));
 });
 
+app.get('/api/filament-catalog', requireAuth, (_req, res) => {
+  if (!FEATURE_GLOBAL_FILAMENT_CATALOG) {
+    res.status(404).json({ error: 'Feature disabled' });
+    return;
+  }
+
+  const rows = db.prepare('SELECT * FROM filament_catalog ORDER BY brand ASC, material ASC, color ASC LIMIT 100').all() as FilamentCatalogRow[];
+  res.json({
+    items: rows.map(mapCatalogItem),
+    attribution: 'Data from FilamentColors.xyz (CC BY 4.0)',
+  });
+});
+
+app.get('/api/filament-catalog/:id', requireAuth, (req, res) => {
+  if (!FEATURE_GLOBAL_FILAMENT_CATALOG) {
+    res.status(404).json({ error: 'Feature disabled' });
+    return;
+  }
+
+  const row = db.prepare('SELECT * FROM filament_catalog WHERE id = ?').get(req.params.id) as FilamentCatalogRow | undefined;
+  if (!row) {
+    res.status(404).json({ error: 'Catalog filament not found.' });
+    return;
+  }
+
+  res.json(mapCatalogItem(row));
+});
+
+app.post('/api/filament-catalog/sync', requireAdmin, async (_req, res) => {
+  try {
+    const imported = await syncFilamentCatalogFromFilamentColors();
+    res.json({ success: true, imported });
+  } catch (error) {
+    const message = error instanceof Error ? error.message : 'Sync failed';
+    db.prepare(
+      `INSERT INTO filament_catalog_sync_state (provider, last_error)
+       VALUES ('filamentcolors', ?)
+       ON CONFLICT(provider) DO UPDATE SET last_error = excluded.last_error`
+    ).run(message);
+    res.status(500).json({ error: message });
+  }
+});
+
 
 
 // POST /api/inventory/spools — create spool
@@ -1979,6 +2207,102 @@ app.post('/api/inventory/spools', requireAuth, (req, res) => {
   saveCustomSpoolOptions(user.id, brand, material);
   const spool = db.prepare('SELECT * FROM filament_inventory WHERE id=?').get(id) as DbSpool;
   res.json(mapSpool(spool));
+});
+
+app.post('/api/inventory/spools/import-from-catalog', requireAuth, (req, res) => {
+  const user = req.user as DbUser;
+  const { catalogFilamentId, totalGrams, remainingG, price = 0, notes = '', shopUrl = null } = req.body as {
+    catalogFilamentId?: string;
+    totalGrams?: number;
+    remainingG?: number;
+    price?: number;
+    notes?: string;
+    shopUrl?: string | null;
+  };
+
+  if (!catalogFilamentId) {
+    res.status(400).json({ error: 'catalogFilamentId is required' });
+    return;
+  }
+
+  const catalogItem = db.prepare('SELECT * FROM filament_catalog WHERE id = ?').get(catalogFilamentId) as FilamentCatalogRow | undefined;
+  if (!catalogItem) {
+    res.status(404).json({ error: 'Catalog filament not found.' });
+    return;
+  }
+
+  const payload = {
+    brand: catalogItem.brand,
+    material: catalogItem.material,
+    color: catalogItem.color,
+    totalGrams,
+    remainingG,
+    price,
+  } satisfies Record<string, unknown>;
+  const err = validateSpoolBody(payload);
+  if (err) {
+    res.status(400).json({ error: err });
+    return;
+  }
+
+  const id = crypto.randomUUID();
+  const now = new Date().toISOString();
+  db.prepare(
+    `INSERT INTO filament_inventory
+      (id, user_id, brand, material, color, color_hex, total_grams, remaining_g, price, notes, shop_url, inventory_source, linked_at, catalog_filament_id, status, created_at, updated_at)
+     VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?, 'active',?,?)`
+  ).run(
+    id,
+    user.id,
+    catalogItem.brand,
+    catalogItem.material,
+    catalogItem.color,
+    catalogItem.color_hex ?? '#cccccc',
+    Number(totalGrams),
+    Number(remainingG),
+    Number(price),
+    notes,
+    shopUrl || catalogItem.purchase_url || null,
+    'catalog_import',
+    now,
+    catalogItem.id,
+    now,
+    now
+  );
+  saveCustomSpoolOptions(user.id, catalogItem.brand, catalogItem.material);
+  const spool = db.prepare('SELECT * FROM filament_inventory WHERE id=?').get(id) as DbSpool;
+  res.json(mapSpool(spool));
+});
+
+app.post('/api/inventory/spools/:id/link-catalog', requireAuth, (req, res) => {
+  const user = req.user as DbUser;
+  const { catalogFilamentId } = req.body as { catalogFilamentId?: string };
+  if (!catalogFilamentId) {
+    res.status(400).json({ error: 'catalogFilamentId is required' });
+    return;
+  }
+
+  const spool = db.prepare('SELECT * FROM filament_inventory WHERE id=? AND user_id=?').get(req.params.id, user.id) as DbSpool | undefined;
+  if (!spool) {
+    res.status(404).json({ error: 'Spool not found.' });
+    return;
+  }
+
+  const catalogItem = db.prepare('SELECT * FROM filament_catalog WHERE id = ?').get(catalogFilamentId) as FilamentCatalogRow | undefined;
+  if (!catalogItem) {
+    res.status(404).json({ error: 'Catalog filament not found.' });
+    return;
+  }
+
+  const now = new Date().toISOString();
+  db.prepare(
+    `UPDATE filament_inventory
+     SET catalog_filament_id=?, inventory_source='catalog_link', linked_at=?, last_synced_at=?, updated_at=?
+     WHERE id=? AND user_id=?`
+  ).run(catalogItem.id, now, now, now, req.params.id, user.id);
+
+  const updated = db.prepare('SELECT * FROM filament_inventory WHERE id=?').get(req.params.id) as DbSpool;
+  res.json(mapSpool(updated));
 });
 
 // PUT /api/inventory/spools/:id — update spool
@@ -3584,8 +3908,10 @@ app.post('/api/auth/reset-password', async (req, res) => {
 
 
 if (process.env.NODE_ENV !== 'test') {
-  app.listen(PORT, () => {
-    console.log(`✓ Servidor Express en http://localhost:${PORT}`);
+  void ensureInitialFilamentCatalogSeed().finally(() => {
+    app.listen(PORT, () => {
+      console.log(`✓ Servidor Express en http://localhost:${PORT}`);
+    });
   });
 }
 

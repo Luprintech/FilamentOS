@@ -1,4 +1,5 @@
 import { createContext, useContext, useEffect, useState } from 'react';
+import { HttpClientError, httpRequest } from '@/shared/api/http-client';
 
 interface LupeAuthContextValue {
   isAdmin: boolean;
@@ -14,25 +15,31 @@ export function LupeAuthProvider({ children }: { children: React.ReactNode }) {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    fetch('/api/lupe/me', { credentials: 'include' })
-      .then((r) => r.json())
+    httpRequest<{ isAdmin?: boolean }>({ url: '/api/lupe/me', init: { credentials: 'include' } })
       .then((d) => setIsAdmin(!!d.isAdmin))
       .catch(() => setIsAdmin(false))
       .finally(() => setLoading(false));
   }, []);
 
   async function login(user: string, pass: string) {
-    const r = await fetch('/api/lupe/login', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      credentials: 'include',
-      body: JSON.stringify({ user, pass }),
-    });
-    if (!r.ok) {
-      const d = await r.json().catch(() => ({}));
-      throw new Error(d.error || 'Credenciales incorrectas');
+    try {
+      await httpRequest({
+        url: '/api/lupe/login',
+        init: {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          credentials: 'include',
+          body: JSON.stringify({ user, pass }),
+        },
+      });
+      setIsAdmin(true);
+    } catch (error) {
+      setIsAdmin(false);
+      if (error instanceof HttpClientError) {
+        throw new Error(error.message || 'Credenciales incorrectas');
+      }
+      throw error;
     }
-    setIsAdmin(true);
   }
 
   async function logout() {

@@ -7,6 +7,7 @@ import {
   ExternalLink, ImageOff, KeyRound, Tag, LayoutList, Eye, EyeOff, Package,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
+import { httpRequest, HttpClientError } from '@/shared/api/http-client';
 
 // ── Types ──────────────────────────────────────────────────────────────────────
 
@@ -43,7 +44,7 @@ const EMPTY_CATEGORY: Omit<Category, 'id' | 'created_at'> = {
   color: 'text-muted-foreground', badge_cls: '', sort_order: 99,
 };
 
-type Tab = 'resources' | 'categories' | 'settings';
+type Tab = 'resources' | 'categories' | 'catalog' | 'settings';
 
 // ── Login ──────────────────────────────────────────────────────────────────────
 
@@ -343,18 +344,34 @@ function ImageUploader({ resource, onDone }: { resource: Resource; onDone: () =>
 // ── Resources tab ──────────────────────────────────────────────────────────────
 
 function ResourcesTab({ categories }: { categories: Category[] }) {
+  const { logout } = useLupeAuth();
   const [resources, setResources]   = useState<Resource[]>([]);
   const [loading, setLoading]       = useState(true);
   const [filterCat, setFilterCat]   = useState<string>('all');
   const [editTarget, setEditTarget] = useState<Resource | null | 'new'>(null);
   const [deleteId, setDeleteId]     = useState<string | null>(null);
   const [deleting, setDeleting]     = useState(false);
+  const [loadError, setLoadError]   = useState('');
 
   async function load() {
     setLoading(true);
-    const r = await fetch('/api/lupe/resources', { credentials: 'include' });
-    setResources(await r.json());
-    setLoading(false);
+    setLoadError('');
+    try {
+      const data = await httpRequest<unknown>({ url: '/api/lupe/resources', init: { credentials: 'include' } });
+      if (!Array.isArray(data)) {
+        throw new Error('La respuesta de recursos no es una lista válida');
+      }
+      setResources(data as Resource[]);
+    } catch (err) {
+      if (err instanceof HttpClientError && err.status === 401) {
+        await logout();
+        return;
+      }
+      setResources([]);
+      setLoadError(err instanceof Error ? err.message : 'No se pudieron cargar los recursos');
+    } finally {
+      setLoading(false);
+    }
   }
 
   useEffect(() => { load(); }, []);
@@ -378,7 +395,8 @@ function ResourcesTab({ categories }: { categories: Category[] }) {
     await load();
   }
 
-  const visible = filterCat === 'all' ? resources : resources.filter((r) => r.category === filterCat);
+  const safeResources = Array.isArray(resources) ? resources : [];
+  const visible = filterCat === 'all' ? safeResources : safeResources.filter((r) => r.category === filterCat);
 
   return (
     <div className="space-y-5">
@@ -391,7 +409,7 @@ function ResourcesTab({ categories }: { categories: Category[] }) {
             className={cn('rounded-full border px-3 py-1 text-xs font-bold transition-colors',
               filterCat === 'all' ? 'border-primary/40 bg-primary/15 text-primary' : 'border-border/50 bg-muted/20 text-muted-foreground hover:text-foreground')}
           >
-            Todos ({resources.length})
+            Todos ({safeResources.length})
           </button>
           {categories.map((cat) => (
             <button
@@ -401,7 +419,7 @@ function ResourcesTab({ categories }: { categories: Category[] }) {
               className={cn('rounded-full border px-3 py-1 text-xs font-bold transition-colors',
                 filterCat === cat.id ? 'border-primary/40 bg-primary/15 text-primary' : 'border-border/50 bg-muted/20 text-muted-foreground hover:text-foreground')}
             >
-              {cat.label_es} ({resources.filter((r) => r.category === cat.id).length})
+              {cat.label_es} ({safeResources.filter((r) => r.category === cat.id).length})
             </button>
           ))}
         </div>
@@ -414,6 +432,11 @@ function ResourcesTab({ categories }: { categories: Category[] }) {
         <div className="flex justify-center py-20"><Loader2 className="h-8 w-8 animate-spin text-muted-foreground" /></div>
       ) : (
         <div className="space-y-2">
+          {loadError && (
+            <div className="rounded-xl border border-destructive/30 bg-destructive/10 px-4 py-3 text-sm text-destructive">
+              {loadError}
+            </div>
+          )}
           {visible.map((res) => {
             const cat = categories.find((c) => c.id === res.category);
             const isDeleting = deleteId === res.id;
@@ -587,6 +610,7 @@ function CategoryForm({ initial, onSave, onClose }: CategoryFormProps) {
 // ── Categories tab ─────────────────────────────────────────────────────────────
 
 function CategoriesTab({ categories, onCategoriesChange }: { categories: Category[]; onCategoriesChange: () => void }) {
+  const { logout } = useLupeAuth();
   const [editTarget, setEditTarget] = useState<Category | null | 'new'>(null);
   const [deleteId, setDeleteId]     = useState<string | null>(null);
   const [deleting, setDeleting]     = useState(false);
@@ -594,9 +618,11 @@ function CategoriesTab({ categories, onCategoriesChange }: { categories: Categor
   async function handleSave(data: Omit<Category, 'id'>) {
     if (editTarget === 'new') {
       const r = await fetch('/api/lupe/categories', { method: 'POST', credentials: 'include', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(data) });
+      if (r.status === 401) { await logout(); return; }
       if (!r.ok) throw new Error((await r.json().catch(() => ({}))).error || 'Error al crear');
     } else if (editTarget) {
       const r = await fetch(`/api/lupe/categories/${editTarget.id}`, { method: 'PUT', credentials: 'include', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(data) });
+      if (r.status === 401) { await logout(); return; }
       if (!r.ok) throw new Error((await r.json().catch(() => ({}))).error || 'Error al guardar');
     }
     onCategoriesChange();
@@ -604,7 +630,8 @@ function CategoriesTab({ categories, onCategoriesChange }: { categories: Categor
 
   async function handleDelete(id: string) {
     setDeleting(true);
-    await fetch(`/api/lupe/categories/${id}`, { method: 'DELETE', credentials: 'include' });
+    const r = await fetch(`/api/lupe/categories/${id}`, { method: 'DELETE', credentials: 'include' });
+    if (r.status === 401) { await logout(); return; }
     setDeleteId(null);
     setDeleting(false);
     onCategoriesChange();
@@ -792,6 +819,65 @@ function SettingsTab() {
   );
 }
 
+function CatalogTab() {
+  const { logout } = useLupeAuth();
+  const [syncing, setSyncing] = useState(false);
+  const [message, setMessage] = useState('');
+  const [error, setError] = useState('');
+
+  async function handleSync() {
+    setSyncing(true);
+    setMessage('');
+    setError('');
+    try {
+      const result = await httpRequest<{ success: boolean; imported: number }>({
+        url: '/api/filament-catalog/sync',
+        init: { method: 'POST', credentials: 'include' },
+      });
+      setMessage(`Sincronización completada. Filamentos importados/actualizados: ${result.imported}`);
+    } catch (err) {
+      if (err instanceof HttpClientError && err.status === 401) {
+        await logout();
+        return;
+      }
+      const msg = err instanceof HttpClientError ? err.message : 'No se pudo sincronizar el catálogo global';
+      setError(msg);
+    } finally {
+      setSyncing(false);
+    }
+  }
+
+  return (
+    <div className="space-y-6">
+      <div className="rounded-[20px] border border-border/60 bg-card/50 p-6 space-y-4">
+        <div>
+          <h3 className="text-lg font-extrabold text-foreground">Catálogo global de filamentos</h3>
+          <p className="text-sm text-muted-foreground">
+            Desde aquí puedes sincronizar la base propia con FilamentColors usando la API oficial.
+          </p>
+        </div>
+
+        <div className="rounded-xl border border-border/50 bg-muted/20 p-4 text-sm text-muted-foreground">
+          La base global se usa para explorar, importar y vincular filamentos desde el inventario, pero el tracker sigue consumiendo bobinas locales.
+        </div>
+
+        {message && <p className="rounded-xl border border-green-500/30 bg-green-500/10 px-3 py-2 text-sm text-green-400">{message}</p>}
+        {error && <p className="rounded-xl border border-destructive/30 bg-destructive/10 px-3 py-2 text-sm text-destructive">{error}</p>}
+
+        <div className="flex flex-wrap gap-2">
+          <Button className="rounded-full font-bold" onClick={handleSync} disabled={syncing}>
+            {syncing ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
+            Sincronizar catálogo global
+          </Button>
+          <Button variant="outline" className="rounded-full" onClick={() => window.open('/filamentos/globales', '_blank')}>
+            Ver base global
+          </Button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 // ── Main panel ─────────────────────────────────────────────────────────────────
 
 function AdminPanel() {
@@ -799,12 +885,27 @@ function AdminPanel() {
   const [tab, setTab]       = useState<Tab>('resources');
   const [categories, setCategories] = useState<Category[]>([]);
   const [catsLoading, setCatsLoading] = useState(true);
+  const [catsError, setCatsError] = useState('');
 
   async function loadCategories() {
     setCatsLoading(true);
-    const r = await fetch('/api/lupe/categories', { credentials: 'include' });
-    setCategories(await r.json());
-    setCatsLoading(false);
+    setCatsError('');
+    try {
+      const data = await httpRequest<unknown>({ url: '/api/lupe/categories', init: { credentials: 'include' } });
+      if (!Array.isArray(data)) {
+        throw new Error('La respuesta de categorías no es una lista válida');
+      }
+      setCategories(data as Category[]);
+    } catch (err) {
+      if (err instanceof HttpClientError && err.status === 401) {
+        await logout();
+        return;
+      }
+      setCategories([]);
+      setCatsError(err instanceof Error ? err.message : 'No se pudieron cargar las categorías');
+    } finally {
+      setCatsLoading(false);
+    }
   }
 
   useEffect(() => { loadCategories(); }, []);
@@ -812,6 +913,7 @@ function AdminPanel() {
   const TABS: { id: Tab; label: string; icon: React.ReactNode }[] = [
     { id: 'resources',  label: 'Recursos',    icon: <LayoutList className="h-3.5 w-3.5" /> },
     { id: 'categories', label: 'Categorías',  icon: <Tag className="h-3.5 w-3.5" /> },
+    { id: 'catalog',    label: 'Catálogo',    icon: <Package className="h-3.5 w-3.5" /> },
     { id: 'settings',   label: 'Ajustes',     icon: <KeyRound className="h-3.5 w-3.5" /> },
   ];
 
@@ -880,8 +982,14 @@ function AdminPanel() {
           <div className="flex justify-center py-20"><Loader2 className="h-8 w-8 animate-spin text-muted-foreground" /></div>
         ) : (
           <>
+            {catsError && tab !== 'catalog' && (
+              <div className="mb-4 rounded-xl border border-destructive/30 bg-destructive/10 px-4 py-3 text-sm text-destructive">
+                {catsError}
+              </div>
+            )}
             {tab === 'resources'  && <ResourcesTab categories={categories} />}
             {tab === 'categories' && <CategoriesTab categories={categories} onCategoriesChange={loadCategories} />}
+            {tab === 'catalog'    && <CatalogTab />}
             {tab === 'settings'   && <SettingsTab />}
           </>
         )}

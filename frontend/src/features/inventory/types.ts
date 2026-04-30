@@ -1,7 +1,25 @@
 // ── Filament Inventory Types ───────────────────────────────────────────────────
 
 export type SpoolStatus = 'active' | 'finished';
-export type InventorySource = 'local';
+export type InventorySource = 'local' | 'catalog_import' | 'catalog_link';
+
+export interface FilamentCatalogItem {
+  id: string;
+  source: string;
+  externalId: string;
+  slug: string;
+  brand: string;
+  material: string;
+  color: string;
+  colorHex: string | null;
+  finish: string | null;
+  imageUrl: string | null;
+  purchaseUrl: string | null;
+  attribution: string;
+  metadata: Record<string, unknown>;
+  lastSeenAt: string;
+  lastSyncedAt: string;
+}
 
 export interface Spool {
   id: string;
@@ -17,6 +35,7 @@ export interface Spool {
   inventorySource: InventorySource;
   linkedAt: string | null;
   lastSyncedAt: string | null;
+  catalogFilamentId: string | null;
   status: SpoolStatus;
   createdAt: string;
   updatedAt: string;

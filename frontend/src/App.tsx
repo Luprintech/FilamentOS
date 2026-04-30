@@ -18,6 +18,7 @@ import { CalculadoraPage } from '@/pages/CalculadoraPage';
 import { CalculadoraPdfPage } from '@/pages/CalculadoraPdfPage';
 import { EstadisticasPage } from '@/pages/EstadisticasPage';
 import { InventarioPage } from '@/pages/InventarioPage';
+import { GlobalFilamentCatalogPage } from '@/pages/GlobalFilamentCatalogPage';
 import { ProyectosPage } from '@/pages/ProyectosPage';
 import { BitacoraLayout } from '@/pages/bitacora/BitacoraLayout';
 import { BitacoraManagerPage } from '@/pages/bitacora/BitacoraManagerPage';
@@ -124,6 +125,7 @@ function AppRoutes() {
           </Route>
           <Route path="/estadisticas" element={<EstadisticasPage />} />
           <Route path="/inventario"   element={<InventarioPage />} />
+          <Route path="/filamentos/globales" element={<GlobalFilamentCatalogPage />} />
           <Route path="/recursos"     element={<RecursosPage />} />
           <Route path="/ajustes"      element={<SettingsPage />} />
         </Route>
