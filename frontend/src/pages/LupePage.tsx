@@ -4,10 +4,11 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import {
   Loader2, LogOut, Plus, Pencil, Trash2, ImagePlus, X, Check,
-  ExternalLink, ImageOff, KeyRound, Tag, LayoutList, Eye, EyeOff, Package,
+  ExternalLink, ImageOff, KeyRound, Tag, LayoutList, Eye, EyeOff, Package, Filter,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { httpRequest, HttpClientError } from '@/shared/api/http-client';
+import { PaginationBar } from '@/components/ui/pagination-bar';
 
 // ── Types ──────────────────────────────────────────────────────────────────────
 
@@ -34,6 +35,13 @@ interface Resource {
   extra_tags: string[];
 }
 
+interface ResourceTag {
+  id: string;
+  label: string;
+  badge_cls: string;
+  sort_order: number;
+}
+
 const EMPTY_RESOURCE: Omit<Resource, 'id' | 'custom_image'> = {
   name: '', description: '', url: '', category: 'utils',
   is_ai: 0, is_free: 0, is_new: 0, sort_order: 99, extra_tags: [],
@@ -44,7 +52,7 @@ const EMPTY_CATEGORY: Omit<Category, 'id' | 'created_at'> = {
   color: 'text-muted-foreground', badge_cls: '', sort_order: 99,
 };
 
-type Tab = 'resources' | 'categories' | 'catalog' | 'settings';
+type Tab = 'resources' | 'categories' | 'tags' | 'catalog' | 'settings';
 
 // ── Login ──────────────────────────────────────────────────────────────────────
 
@@ -146,11 +154,12 @@ function Badge({ color, children }: { color: 'blue' | 'green' | 'pink'; children
 interface ResourceFormProps {
   initial?: Resource | null;
   categories: Category[];
+  availableTags: ResourceTag[];
   onSave: (data: Omit<Resource, 'id' | 'custom_image'>) => Promise<void>;
   onClose: () => void;
 }
 
-function ResourceForm({ initial, categories, onSave, onClose }: ResourceFormProps) {
+function ResourceForm({ initial, categories, availableTags, onSave, onClose }: ResourceFormProps) {
   const [form, setForm] = useState<Omit<Resource, 'id' | 'custom_image'>>(
     initial
       ? { name: initial.name, description: initial.description, url: initial.url, category: initial.category, is_ai: initial.is_ai, is_free: initial.is_free, is_new: initial.is_new, sort_order: initial.sort_order, extra_tags: Array.isArray(initial.extra_tags) ? initial.extra_tags : [] }
@@ -229,6 +238,30 @@ function ResourceForm({ initial, categories, onSave, onClose }: ResourceFormProp
           {/* Etiquetas personalizadas */}
           <div>
             <label className="text-xs font-bold uppercase tracking-wider text-muted-foreground">Etiquetas adicionales</label>
+            {availableTags.length > 0 && (
+              <div className="mt-2 flex flex-wrap gap-1.5">
+                {availableTags.map((tag) => {
+                  const selected = (form.extra_tags ?? []).includes(tag.label);
+                  return (
+                    <button
+                      key={tag.id}
+                      type="button"
+                      onClick={() => set('extra_tags', selected
+                        ? (form.extra_tags ?? []).filter((t) => t !== tag.label)
+                        : [...(form.extra_tags ?? []), tag.label])}
+                      className={cn(
+                        'rounded-full border px-2.5 py-1 text-[0.65rem] font-bold transition-colors',
+                        selected
+                          ? tag.badge_cls || 'border-primary/30 bg-primary/10 text-primary'
+                          : 'border-border/50 bg-muted/20 text-muted-foreground hover:text-foreground'
+                      )}
+                    >
+                      {tag.label}
+                    </button>
+                  );
+                })}
+              </div>
+            )}
             <div className="mt-2 flex flex-wrap gap-1.5">
               {(form.extra_tags ?? []).map((tag) => (
                 <span key={tag} className="inline-flex items-center gap-1 rounded-full border border-border/50 bg-muted/30 px-2.5 py-0.5 text-[0.65rem] font-bold text-foreground">
@@ -343,7 +376,7 @@ function ImageUploader({ resource, onDone }: { resource: Resource; onDone: () =>
 
 // ── Resources tab ──────────────────────────────────────────────────────────────
 
-function ResourcesTab({ categories }: { categories: Category[] }) {
+function ResourcesTab({ categories, tags }: { categories: Category[]; tags: ResourceTag[] }) {
   const { logout } = useLupeAuth();
   const [resources, setResources]   = useState<Resource[]>([]);
   const [loading, setLoading]       = useState(true);
@@ -508,6 +541,169 @@ function ResourcesTab({ categories }: { categories: Category[] }) {
         <ResourceForm
           initial={editTarget === 'new' ? null : editTarget}
           categories={categories}
+          availableTags={tags}
+          onSave={handleSave}
+          onClose={() => setEditTarget(null)}
+        />
+      )}
+    </div>
+  );
+}
+
+interface TagFormProps {
+  initial?: ResourceTag | null;
+  onSave: (data: Omit<ResourceTag, 'id'>) => Promise<void>;
+  onClose: () => void;
+}
+
+function TagForm({ initial, onSave, onClose }: TagFormProps) {
+  const [form, setForm] = useState<Omit<ResourceTag, 'id'>>(
+    initial
+      ? { label: initial.label, badge_cls: initial.badge_cls, sort_order: initial.sort_order }
+      : { label: '', badge_cls: 'border-border/50 bg-muted/20 text-muted-foreground', sort_order: 99 }
+  );
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState('');
+
+  async function handleSubmit(e: React.FormEvent) {
+    e.preventDefault();
+    setSaving(true);
+    setError('');
+    try {
+      await onSave(form);
+      onClose();
+    } catch (err: any) {
+      setError(err.message);
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4 backdrop-blur-sm">
+      <div className="w-full max-w-md rounded-[24px] border border-border/60 bg-card p-6 shadow-2xl">
+        <div className="mb-5 flex items-center justify-between">
+          <h2 className="text-lg font-black text-foreground">{initial ? 'Editar etiqueta' : 'Nueva etiqueta'}</h2>
+          <button type="button" onClick={onClose} className="rounded-full p-1.5 hover:bg-muted/40"><X className="h-4 w-4" /></button>
+        </div>
+
+        <form onSubmit={handleSubmit} className="space-y-4">
+          <Field label="Nombre">
+            <Input value={form.label} onChange={(e) => setForm((f) => ({ ...f, label: e.target.value }))} required placeholder="Ej: Premium" />
+          </Field>
+          <Field label="Clases del badge">
+            <Input value={form.badge_cls} onChange={(e) => setForm((f) => ({ ...f, badge_cls: e.target.value }))} />
+          </Field>
+          <Field label="Orden">
+            <Input type="number" value={form.sort_order} onChange={(e) => setForm((f) => ({ ...f, sort_order: Number(e.target.value) }))} min={0} />
+          </Field>
+
+          <div className="rounded-xl border border-border/40 bg-muted/20 p-3">
+            <p className="mb-2 text-[0.65rem] font-bold uppercase tracking-wider text-muted-foreground">Vista previa</p>
+            <span className={cn('inline-flex items-center rounded-full border px-2.5 py-0.5 text-[0.65rem] font-bold', form.badge_cls)}>
+              {form.label || 'Etiqueta'}
+            </span>
+          </div>
+
+          {error && <p className="rounded-xl border border-destructive/30 bg-destructive/10 px-3 py-2 text-xs text-destructive">{error}</p>}
+
+          <div className="flex justify-end gap-2 pt-2">
+            <Button type="button" variant="outline" className="rounded-full" onClick={onClose}>Cancelar</Button>
+            <Button type="submit" className="rounded-full font-bold" disabled={saving}>
+              {saving ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Check className="mr-2 h-4 w-4" />}
+              Guardar
+            </Button>
+          </div>
+        </form>
+      </div>
+    </div>
+  );
+}
+
+function TagsTab({ tags, onTagsChange }: { tags: ResourceTag[]; onTagsChange: () => void }) {
+  const { logout } = useLupeAuth();
+  const [editTarget, setEditTarget] = useState<ResourceTag | null | 'new'>(null);
+  const [deleteId, setDeleteId] = useState<string | null>(null);
+  const [deleting, setDeleting] = useState(false);
+
+  async function handleSave(data: Omit<ResourceTag, 'id'>) {
+    if (editTarget === 'new') {
+      const r = await fetch('/api/lupe/tags', { method: 'POST', credentials: 'include', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(data) });
+      if (r.status === 401) { await logout(); return; }
+      if (!r.ok) throw new Error((await r.json().catch(() => ({}))).error || 'Error al crear');
+    } else if (editTarget) {
+      const r = await fetch(`/api/lupe/tags/${editTarget.id}`, { method: 'PUT', credentials: 'include', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(data) });
+      if (r.status === 401) { await logout(); return; }
+      if (!r.ok) throw new Error((await r.json().catch(() => ({}))).error || 'Error al guardar');
+    }
+    onTagsChange();
+  }
+
+  async function handleDelete(id: string) {
+    setDeleting(true);
+    const r = await fetch(`/api/lupe/tags/${id}`, { method: 'DELETE', credentials: 'include' });
+    if (r.status === 401) { await logout(); return; }
+    setDeleteId(null);
+    setDeleting(false);
+    onTagsChange();
+  }
+
+  return (
+    <div className="space-y-5">
+      <div className="flex items-center justify-between">
+        <p className="text-sm text-muted-foreground">{tags.length} etiqueta{tags.length !== 1 ? 's' : ''} configurada{tags.length !== 1 ? 's' : ''}</p>
+        <Button className="rounded-full font-bold" onClick={() => setEditTarget('new')}>
+          <Plus className="mr-1.5 h-4 w-4" />Nueva etiqueta
+        </Button>
+      </div>
+
+      <div className="space-y-2">
+        {tags.map((tag) => {
+          const isDeleting = deleteId === tag.id;
+          return (
+            <div key={tag.id} className="flex items-center gap-4 rounded-[18px] border border-border/50 bg-card/50 p-4">
+              <div className="shrink-0">
+                <span className={cn('inline-flex items-center rounded-full border px-2.5 py-0.5 text-[0.65rem] font-bold', tag.badge_cls)}>
+                  {tag.label}
+                </span>
+              </div>
+              <div className="min-w-0 flex-1 space-y-0.5">
+                <p className="text-sm font-bold text-foreground">{tag.label}</p>
+                <p className="truncate text-[0.65rem] text-muted-foreground/60 font-mono">id: {tag.id} · orden: {tag.sort_order}</p>
+              </div>
+              <div className="flex shrink-0 items-center gap-1.5">
+                <Button variant="outline" size="icon" className="h-8 w-8 rounded-full" onClick={() => setEditTarget(tag)}>
+                  <Pencil className="h-3.5 w-3.5" />
+                </Button>
+                {isDeleting ? (
+                  <div className="flex items-center gap-1">
+                    <Button size="sm" variant="destructive" className="h-8 rounded-full px-3 text-xs font-bold" disabled={deleting} onClick={() => handleDelete(tag.id)}>
+                      {deleting ? <Loader2 className="h-3 w-3 animate-spin" /> : '¿Seguro?'}
+                    </Button>
+                    <Button size="icon" variant="outline" className="h-8 w-8 rounded-full" onClick={() => setDeleteId(null)}>
+                      <X className="h-3.5 w-3.5" />
+                    </Button>
+                  </div>
+                ) : (
+                  <Button variant="outline" size="icon" className="h-8 w-8 rounded-full border-destructive/30 text-destructive hover:bg-destructive/10" onClick={() => setDeleteId(tag.id)}>
+                    <Trash2 className="h-3.5 w-3.5" />
+                  </Button>
+                )}
+              </div>
+            </div>
+          );
+        })}
+
+        {tags.length === 0 && (
+          <div className="rounded-[18px] border border-dashed border-border/50 py-16 text-center text-sm text-muted-foreground">
+            Sin etiquetas. Crea la primera.
+          </div>
+        )}
+      </div>
+
+      {editTarget !== null && (
+        <TagForm
+          initial={editTarget === 'new' ? null : editTarget}
           onSave={handleSave}
           onClose={() => setEditTarget(null)}
         />
@@ -819,60 +1015,539 @@ function SettingsTab() {
   );
 }
 
+interface CatalogFilament {
+  id: string;
+  source: string;
+  brand: string;
+  material: string;
+  color: string;
+  colorHex: string | null;
+  imageUrl: string | null;
+  customImage: string | null;
+  purchaseUrl: string | null;
+  finish: string | null;
+}
+
+// ── SpoolIcon SVG ──────────────────────────────────────────────────────────────
+function SpoolIcon({ colorHex, size = 24 }: { colorHex: string; size?: number }) {
+  return (
+    <svg
+      width={size}
+      height={size}
+      viewBox="0 0 80 80"
+      fill="none"
+      xmlns="http://www.w3.org/2000/svg"
+      aria-hidden="true"
+    >
+      <circle cx="40" cy="40" r="37" fill="#2a2a2a" />
+      <circle cx="40" cy="40" r="35" fill="#404040" />
+      <circle cx="40" cy="40" r="30" fill="#383838" />
+      <circle cx="40" cy="40" r="29" fill={colorHex} />
+      {[25, 21, 17].map((r) => (
+        <circle key={r} cx="40" cy="40" r={r} fill="none" stroke="black" strokeOpacity="0.12" strokeWidth="1.2" />
+      ))}
+      <circle cx="40" cy="40" r="14" fill="#2c2c2c" />
+      {[0, 60, 120, 180, 240, 300].map((deg) => {
+        const rad = (deg * Math.PI) / 180;
+        const x1 = 40 + 14 * Math.cos(rad);
+        const y1 = 40 + 14 * Math.sin(rad);
+        const x2 = 40 + 9 * Math.cos(rad);
+        const y2 = 40 + 9 * Math.sin(rad);
+        return (
+          <line key={deg} x1={x1} y1={y1} x2={x2} y2={y2} stroke="#555" strokeWidth="1.5" strokeLinecap="round" />
+        );
+      })}
+      <circle cx="40" cy="40" r="8" fill="#1a1a1a" />
+      <circle cx="40" cy="40" r="8" fill="none" stroke="#555" strokeWidth="0.8" />
+    </svg>
+  );
+}
+
 function CatalogTab() {
   const { logout } = useLupeAuth();
+  const [filaments, setFilaments] = useState<CatalogFilament[]>([]);
+  const [pagination, setPagination] = useState({ page: 1, limit: 50, total: 0, totalPages: 1 });
+  const [loading, setLoading] = useState(true);
   const [syncing, setSyncing] = useState(false);
-  const [message, setMessage] = useState('');
-  const [error, setError] = useState('');
+  const [syncMessage, setSyncMessage] = useState('');
+  const [syncError, setSyncError] = useState('');
+  
+  // Filtros
+  const [brands, setBrands] = useState<string[]>([]);
+  const [materials, setMaterials] = useState<string[]>([]);
+  const [selectedBrand, setSelectedBrand] = useState('');
+  const [selectedMaterial, setSelectedMaterial] = useState('');
+  const [colorSearch, setColorSearch] = useState('');
+  const [currentPage, setCurrentPage] = useState(1);
+  
+  const [editTarget, setEditTarget] = useState<CatalogFilament | null>(null);
+  const [addModalOpen, setAddModalOpen] = useState(false);
 
-  async function handleSync() {
-    setSyncing(true);
-    setMessage('');
-    setError('');
+  // Cargar metadatos de filtros
+  useEffect(() => {
+    async function loadFilters() {
+      try {
+        const data = await httpRequest<{ brands: string[]; materials: string[] }>({
+          url: '/api/filament-catalog/metadata/filters',
+          init: { credentials: 'include' },
+        });
+        setBrands(data.brands);
+        setMaterials(data.materials);
+      } catch (err) {
+        if (err instanceof HttpClientError && err.status === 401) {
+          await logout();
+        }
+      }
+    }
+    void loadFilters();
+  }, []);
+
+  async function loadFilaments() {
+    setLoading(true);
     try {
-      const result = await httpRequest<{ success: boolean; imported: number }>({
-        url: '/api/filament-catalog/sync',
-        init: { method: 'POST', credentials: 'include' },
+      const params = new URLSearchParams({
+        page: String(currentPage),
+        limit: '50',
       });
-      setMessage(`Sincronización completada. Filamentos importados/actualizados: ${result.imported}`);
+      if (selectedBrand) params.set('brand', selectedBrand);
+      if (selectedMaterial) params.set('material', selectedMaterial);
+      if (colorSearch.trim()) params.set('color', colorSearch.trim());
+
+      const r = await httpRequest<{ items: CatalogFilament[]; pagination: { page: number; limit: number; total: number; totalPages: number } }>({
+        url: `/api/filament-catalog?${params.toString()}`,
+        init: { credentials: 'include' },
+      });
+      setFilaments(r.items);
+      setPagination(r.pagination);
     } catch (err) {
       if (err instanceof HttpClientError && err.status === 401) {
         await logout();
         return;
       }
-      const msg = err instanceof HttpClientError ? err.message : 'No se pudo sincronizar el catálogo global';
-      setError(msg);
+      setFilaments([]);
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  useEffect(() => { void loadFilaments(); }, [currentPage, selectedBrand, selectedMaterial, colorSearch]);
+
+  async function handleSync() {
+    setSyncing(true);
+    setSyncMessage('');
+    setSyncError('');
+    try {
+      const result = await httpRequest<{ success: boolean; imported: number }>({
+        url: '/api/filament-catalog/sync',
+        init: { method: 'POST', credentials: 'include' },
+      });
+      setSyncMessage(`✅ Sincronización completa: ${result.imported} filamentos importados.`);
+      await loadFilaments();
+    } catch (err) {
+      if (err instanceof HttpClientError && err.status === 401) {
+        await logout();
+        return;
+      }
+      setSyncError(err instanceof HttpClientError ? err.message : 'No se pudo sincronizar');
     } finally {
       setSyncing(false);
     }
   }
 
+  async function handleUpdateUrl(id: string, purchaseUrl: string, customImage: string | null) {
+    try {
+      await httpRequest({
+        url: `/api/filament-catalog/${id}`,
+        init: {
+          method: 'PUT',
+          credentials: 'include',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ purchaseUrl, customImage }),
+        },
+      });
+      await loadFilaments();
+      setEditTarget(null);
+    } catch (err) {
+      if (err instanceof HttpClientError && err.status === 401) {
+        await logout();
+        return;
+      }
+      alert(err instanceof HttpClientError ? err.message : 'Error al actualizar');
+    }
+  }
+
+  async function handleDelete(id: string) {
+    if (!confirm('¿Eliminar este filamento del catálogo?')) return;
+    try {
+      await httpRequest({ url: `/api/filament-catalog/${id}`, init: { method: 'DELETE', credentials: 'include' } });
+      await loadFilaments();
+    } catch (err) {
+      if (err instanceof HttpClientError && err.status === 401) {
+        await logout();
+        return;
+      }
+      alert(err instanceof HttpClientError ? err.message : 'Error al eliminar');
+    }
+  }
+
+  function handleResetFilters() {
+    setSelectedBrand('');
+    setSelectedMaterial('');
+    setColorSearch('');
+    setCurrentPage(1);
+  }
+
+  const hasFilters = selectedBrand || selectedMaterial || colorSearch;
+
   return (
-    <div className="space-y-6">
-      <div className="rounded-[20px] border border-border/60 bg-card/50 p-6 space-y-4">
+    <div className="space-y-3">
+      {/* Header con acciones */}
+      <div className="flex flex-wrap items-center justify-between gap-3">
         <div>
-          <h3 className="text-lg font-extrabold text-foreground">Catálogo global de filamentos</h3>
+          <h3 className="text-base font-bold text-foreground">Catálogo global de filamentos</h3>
+          <p className="text-xs text-muted-foreground">Gestiona enlaces de afiliado y añade marcas españolas</p>
+        </div>
+        <div className="flex flex-wrap gap-2">
+          <Button size="sm" className="rounded-full font-bold" onClick={handleSync} disabled={syncing}>
+            {syncing ? <Loader2 className="mr-2 h-3.5 w-3.5 animate-spin" /> : null}
+            Sincronizar
+          </Button>
+          <Button size="sm" variant="outline" className="rounded-full" onClick={() => setAddModalOpen(true)}>
+            <Plus className="mr-1.5 h-3.5 w-3.5" />
+            Añadir
+          </Button>
+          <Button size="sm" variant="outline" className="rounded-full" onClick={() => window.open('/filamentos/globales', '_blank')}>
+            <ExternalLink className="h-3.5 w-3.5" />
+          </Button>
+        </div>
+      </div>
+
+      {syncMessage && <p className="rounded-lg border border-green-500/30 bg-green-500/10 px-3 py-2 text-xs text-green-400">{syncMessage}</p>}
+      {syncError && <p className="rounded-lg border border-destructive/30 bg-destructive/10 px-3 py-2 text-xs text-destructive">{syncError}</p>}
+
+      {/* Filtros */}
+      <div className="rounded-lg border border-border/50 bg-muted/20 p-3 space-y-2">
+        <div className="flex items-center gap-2">
+          <Filter className="h-3.5 w-3.5 text-muted-foreground" />
+          <h4 className="text-xs font-bold text-foreground">Filtros</h4>
+        </div>
+        <div className="grid grid-cols-1 gap-2 sm:grid-cols-2 lg:grid-cols-4">
+          <select
+            className="h-8 w-full rounded-full border border-border bg-background px-3 text-xs text-foreground"
+            value={selectedBrand}
+            onChange={(e) => { setSelectedBrand(e.target.value); setCurrentPage(1); }}
+          >
+            <option value="">Todas las marcas</option>
+            {brands.map((brand) => (
+              <option key={brand} value={brand}>{brand}</option>
+            ))}
+          </select>
+
+          <select
+            className="h-8 w-full rounded-full border border-border bg-background px-3 text-xs text-foreground"
+            value={selectedMaterial}
+            onChange={(e) => { setSelectedMaterial(e.target.value); setCurrentPage(1); }}
+          >
+            <option value="">Todos los materiales</option>
+            {materials.map((material) => (
+              <option key={material} value={material}>{material}</option>
+            ))}
+          </select>
+
+          <Input
+            type="text"
+            placeholder="Color..."
+            className="h-8 rounded-full text-xs"
+            value={colorSearch}
+            onChange={(e) => { setColorSearch(e.target.value); setCurrentPage(1); }}
+          />
+
+          {hasFilters && (
+            <Button size="sm" variant="outline" className="h-8 rounded-full text-xs" onClick={handleResetFilters}>
+              Limpiar
+            </Button>
+          )}
+        </div>
+        {pagination.total > 0 && (
+          <p className="text-xs text-muted-foreground">
+            {filaments.length} de {pagination.total} filamentos
+          </p>
+        )}
+      </div>
+
+      {/* Tabla */}
+      {loading ? (
+        <div className="flex justify-center py-10">
+          <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
+        </div>
+      ) : filaments.length === 0 ? (
+        <div className="rounded-lg border border-dashed border-border/60 bg-muted/10 py-10 text-center">
           <p className="text-sm text-muted-foreground">
-            Desde aquí puedes sincronizar la base propia con FilamentColors usando la API oficial.
+            {hasFilters ? 'No hay filamentos con esos filtros.' : 'No hay filamentos en el catálogo.'}
           </p>
         </div>
+      ) : (
+        <>
+          <div className="overflow-x-auto rounded-lg border border-border/50">
+            <table className="w-full text-xs">
+              <thead className="bg-muted/30">
+                <tr className="border-b border-border/50">
+                  <th className="p-2 text-left font-bold text-foreground">Imagen</th>
+                  <th className="p-2 text-left font-bold text-foreground">Marca</th>
+                  <th className="p-2 text-left font-bold text-foreground">Material</th>
+                  <th className="p-2 text-left font-bold text-foreground">Color</th>
+                  <th className="p-2 text-left font-bold text-foreground">Enlace compra</th>
+                  <th className="p-2 text-right font-bold text-foreground">Acciones</th>
+                </tr>
+              </thead>
+              <tbody>
+                {filaments.map((fil) => (
+                  <tr key={fil.id} className="border-b border-border/30 hover:bg-muted/10">
+                    <td className="p-2">
+                      {fil.customImage ? (
+                        <img src={fil.customImage} alt={fil.color} className="h-8 w-8 rounded border border-border object-cover" />
+                      ) : (
+                        <SpoolIcon colorHex={fil.colorHex || '#888'} size={32} />
+                      )}
+                    </td>
+                    <td className="p-2 font-medium text-foreground">{fil.brand}</td>
+                    <td className="p-2 text-muted-foreground">{fil.material}</td>
+                    <td className="p-2 text-muted-foreground">{fil.color}</td>
+                    <td className="p-2">
+                      {fil.purchaseUrl ? (
+                        <a href={fil.purchaseUrl} target="_blank" rel="noopener noreferrer" className="max-w-xs truncate text-primary hover:underline block">
+                          {fil.purchaseUrl.length > 40 ? fil.purchaseUrl.slice(0, 40) + '...' : fil.purchaseUrl}
+                        </a>
+                      ) : (
+                        <span className="text-muted-foreground/50">—</span>
+                      )}
+                    </td>
+                    <td className="p-2">
+                      <div className="flex justify-end gap-1">
+                        <Button size="sm" variant="ghost" className="h-6 w-6 p-0" onClick={() => setEditTarget(fil)} title="Editar enlace">
+                          <Pencil className="h-3 w-3" />
+                        </Button>
+                        {fil.source === 'manual' && (
+                          <Button size="sm" variant="ghost" className="h-6 w-6 p-0 text-destructive" onClick={() => handleDelete(fil.id)} title="Eliminar">
+                            <Trash2 className="h-3 w-3" />
+                          </Button>
+                        )}
+                      </div>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
 
-        <div className="rounded-xl border border-border/50 bg-muted/20 p-4 text-sm text-muted-foreground">
-          La base global se usa para explorar, importar y vincular filamentos desde el inventario, pero el tracker sigue consumiendo bobinas locales.
+          {pagination.totalPages > 1 && (
+            <PaginationBar
+              currentPage={currentPage}
+              totalPages={pagination.totalPages}
+              onPageChange={setCurrentPage}
+            />
+          )}
+        </>
+      )}
+
+      {editTarget && (
+        <EditCatalogUrlModal
+          filament={editTarget}
+          onClose={() => setEditTarget(null)}
+          onSave={(url, customImage) => handleUpdateUrl(editTarget.id, url, customImage)}
+        />
+      )}
+
+      {addModalOpen && (
+        <AddCatalogFilamentModal
+          onClose={() => setAddModalOpen(false)}
+          onSave={() => { setAddModalOpen(false); void loadFilaments(); }}
+        />
+      )}
+    </div>
+  );
+}
+
+function EditCatalogUrlModal({ filament, onClose, onSave }: { filament: CatalogFilament; onClose: () => void; onSave: (url: string, customImage: string | null) => Promise<void> }) {
+  const [url, setUrl] = useState(filament.purchaseUrl || '');
+  const [customImage, setCustomImage] = useState(filament.customImage || '');
+  const [saving, setSaving] = useState(false);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+
+  async function handleSubmit(e: React.FormEvent) {
+    e.preventDefault();
+    setSaving(true);
+    try {
+      await onSave(url, customImage || null);
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  async function handleImageUpload(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    if (!file.type.startsWith('image/')) {
+      alert('Por favor selecciona una imagen');
+      return;
+    }
+
+    const reader = new FileReader();
+    reader.onload = (ev) => {
+      const base64 = ev.target?.result as string;
+      setCustomImage(base64);
+    };
+    reader.readAsDataURL(file);
+  }
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4 backdrop-blur-sm">
+      <div className="w-full max-w-lg rounded-[24px] border border-border/60 bg-card p-6 shadow-2xl">
+        <div className="mb-4 flex items-center justify-between">
+          <h2 className="text-lg font-black text-foreground">Editar filamento</h2>
+          <button type="button" onClick={onClose} className="rounded-full p-1.5 hover:bg-muted/40"><X className="h-4 w-4" /></button>
         </div>
 
-        {message && <p className="rounded-xl border border-green-500/30 bg-green-500/10 px-3 py-2 text-sm text-green-400">{message}</p>}
-        {error && <p className="rounded-xl border border-destructive/30 bg-destructive/10 px-3 py-2 text-sm text-destructive">{error}</p>}
-
-        <div className="flex flex-wrap gap-2">
-          <Button className="rounded-full font-bold" onClick={handleSync} disabled={syncing}>
-            {syncing ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
-            Sincronizar catálogo global
-          </Button>
-          <Button variant="outline" className="rounded-full" onClick={() => window.open('/filamentos/globales', '_blank')}>
-            Ver base global
-          </Button>
+        <div className="mb-4 rounded-xl border border-border/50 bg-muted/20 p-3">
+          <p className="text-sm font-bold text-foreground">{filament.brand}</p>
+          <p className="text-xs text-muted-foreground">{filament.material} · {filament.color}</p>
         </div>
+
+        <form onSubmit={handleSubmit} className="space-y-4">
+          <Field label="URL de compra (enlace afiliado Amazon, tienda, etc.)">
+            <Input type="url" value={url} onChange={(e) => setUrl(e.target.value)} placeholder="https://..." />
+          </Field>
+
+          <Field label="Imagen personalizada (opcional)">
+            <div className="space-y-2">
+              {customImage && (
+                <div className="relative inline-block">
+                  <img src={customImage} alt="Preview" className="h-24 w-24 rounded-lg border border-border object-cover" />
+                  <button
+                    type="button"
+                    onClick={() => setCustomImage('')}
+                    className="absolute -right-2 -top-2 rounded-full bg-destructive p-1 text-destructive-foreground hover:bg-destructive/90"
+                  >
+                    <X className="h-3 w-3" />
+                  </button>
+                </div>
+              )}
+              <input
+                ref={fileInputRef}
+                type="file"
+                accept="image/*"
+                onChange={handleImageUpload}
+                className="hidden"
+              />
+              <Button
+                type="button"
+                variant="outline"
+                className="rounded-full"
+                onClick={() => fileInputRef.current?.click()}
+              >
+                <ImagePlus className="mr-2 h-4 w-4" />
+                {customImage ? 'Cambiar imagen' : 'Subir imagen'}
+              </Button>
+              <p className="text-xs text-muted-foreground">Si no subes imagen, se mostrará la bobina por defecto</p>
+            </div>
+          </Field>
+
+          <div className="flex justify-end gap-2">
+            <Button type="button" variant="outline" className="rounded-full" onClick={onClose}>Cancelar</Button>
+            <Button type="submit" className="rounded-full font-bold" disabled={saving}>
+              {saving ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
+              Guardar
+            </Button>
+          </div>
+        </form>
+      </div>
+    </div>
+  );
+}
+
+function AddCatalogFilamentModal({ onClose, onSave }: { onClose: () => void; onSave: () => void }) {
+  const [brand, setBrand] = useState('');
+  const [material, setMaterial] = useState('');
+  const [color, setColor] = useState('');
+  const [colorHex, setColorHex] = useState('#cccccc');
+  const [finish, setFinish] = useState('');
+  const [purchaseUrl, setPurchaseUrl] = useState('');
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState('');
+
+  async function handleSubmit(e: React.FormEvent) {
+    e.preventDefault();
+    setError('');
+    setSaving(true);
+    try {
+      const r = await httpRequest({
+        url: '/api/filament-catalog',
+        init: {
+          method: 'POST',
+          credentials: 'include',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ brand, material, color, colorHex, finish: finish || null, purchaseUrl: purchaseUrl || null }),
+        },
+      });
+      onSave();
+    } catch (err) {
+      setError(err instanceof HttpClientError ? err.message : 'Error al crear');
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4 backdrop-blur-sm">
+      <div className="w-full max-w-lg max-h-[90vh] overflow-y-auto rounded-[24px] border border-border/60 bg-card p-6 shadow-2xl">
+        <div className="mb-4 flex items-center justify-between">
+          <h2 className="text-lg font-black text-foreground">Añadir filamento manual</h2>
+          <button type="button" onClick={onClose} className="rounded-full p-1.5 hover:bg-muted/40"><X className="h-4 w-4" /></button>
+        </div>
+
+        <p className="mb-4 text-sm text-muted-foreground">
+          Añade marcas españolas (Sakata, 3DTested, etc.) que no están en FilamentColors.
+        </p>
+
+        <form onSubmit={handleSubmit} className="space-y-4">
+          <Field label="Marca *">
+            <Input value={brand} onChange={(e) => setBrand(e.target.value)} placeholder="Ej: Sakata 3D" required />
+          </Field>
+
+          <Field label="Material *">
+            <Input value={material} onChange={(e) => setMaterial(e.target.value)} placeholder="Ej: PLA, PETG, ABS" required />
+          </Field>
+
+          <Field label="Color *">
+            <Input value={color} onChange={(e) => setColor(e.target.value)} placeholder="Ej: Rojo, Azul cielo" required />
+          </Field>
+
+          <Field label="Código hexadecimal del color">
+            <div className="flex gap-2">
+              <Input type="color" value={colorHex} onChange={(e) => setColorHex(e.target.value)} className="w-16" />
+              <Input type="text" value={colorHex} onChange={(e) => setColorHex(e.target.value)} placeholder="#cccccc" />
+            </div>
+          </Field>
+
+          <Field label="Acabado (opcional)">
+            <Input value={finish} onChange={(e) => setFinish(e.target.value)} placeholder="Ej: matte, silk, marble" />
+          </Field>
+
+          <Field label="URL de compra (opcional)">
+            <Input type="url" value={purchaseUrl} onChange={(e) => setPurchaseUrl(e.target.value)} placeholder="https://..." />
+          </Field>
+
+          {error && <p className="rounded-xl border border-destructive/30 bg-destructive/10 px-3 py-2 text-xs text-destructive">{error}</p>}
+
+          <div className="flex justify-end gap-2">
+            <Button type="button" variant="outline" className="rounded-full" onClick={onClose}>Cancelar</Button>
+            <Button type="submit" className="rounded-full font-bold" disabled={saving}>
+              {saving ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
+              Añadir
+            </Button>
+          </div>
+        </form>
       </div>
     </div>
   );
@@ -884,6 +1559,7 @@ function AdminPanel() {
   const { logout }          = useLupeAuth();
   const [tab, setTab]       = useState<Tab>('resources');
   const [categories, setCategories] = useState<Category[]>([]);
+  const [tags, setTags] = useState<ResourceTag[]>([]);
   const [catsLoading, setCatsLoading] = useState(true);
   const [catsError, setCatsError] = useState('');
 
@@ -910,9 +1586,25 @@ function AdminPanel() {
 
   useEffect(() => { loadCategories(); }, []);
 
+  async function loadTags() {
+    try {
+      const data = await httpRequest<unknown>({ url: '/api/lupe/tags', init: { credentials: 'include' } });
+      setTags(Array.isArray(data) ? data as ResourceTag[] : []);
+    } catch (err) {
+      if (err instanceof HttpClientError && err.status === 401) {
+        await logout();
+        return;
+      }
+      setTags([]);
+    }
+  }
+
+  useEffect(() => { void loadTags(); }, []);
+
   const TABS: { id: Tab; label: string; icon: React.ReactNode }[] = [
     { id: 'resources',  label: 'Recursos',    icon: <LayoutList className="h-3.5 w-3.5" /> },
     { id: 'categories', label: 'Categorías',  icon: <Tag className="h-3.5 w-3.5" /> },
+    { id: 'tags',       label: 'Etiquetas',   icon: <Tag className="h-3.5 w-3.5" /> },
     { id: 'catalog',    label: 'Catálogo',    icon: <Package className="h-3.5 w-3.5" /> },
     { id: 'settings',   label: 'Ajustes',     icon: <KeyRound className="h-3.5 w-3.5" /> },
   ];
@@ -987,8 +1679,9 @@ function AdminPanel() {
                 {catsError}
               </div>
             )}
-            {tab === 'resources'  && <ResourcesTab categories={categories} />}
+            {tab === 'resources'  && <ResourcesTab categories={categories} tags={tags} />}
             {tab === 'categories' && <CategoriesTab categories={categories} onCategoriesChange={loadCategories} />}
+            {tab === 'tags'       && <TagsTab tags={tags} onTagsChange={loadTags} />}
             {tab === 'catalog'    && <CatalogTab />}
             {tab === 'settings'   && <SettingsTab />}
           </>
@@ -1000,10 +1693,28 @@ function AdminPanel() {
 
 // ── Root ───────────────────────────────────────────────────────────────────────
 
+function LupePageContent() {
+  const { isAdmin, loading } = useLupeAuth();
+
+  if (loading) {
+    return (
+      <div className="flex min-h-screen items-center justify-center bg-background">
+        <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
+      </div>
+    );
+  }
+
+  if (!isAdmin) {
+    return <LoginScreen />;
+  }
+
+  return <AdminPanel />;
+}
+
 export function LupePage() {
   return (
     <LupeAuthProvider>
-      <AdminPanel />
+      <LupePageContent />
     </LupeAuthProvider>
   );
 }

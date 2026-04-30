@@ -307,6 +307,18 @@ export function SettingsPage() {
               {item.label}
             </button>
           ))}
+
+          {/* ── Separador ── */}
+          <hr className="my-2 border-border/50" />
+
+          {/* ── Cerrar sesión ── */}
+          <button
+            onClick={logout}
+            className="flex w-full items-center gap-3 rounded-xl px-4 py-2.5 text-left text-sm font-bold text-muted-foreground transition-colors hover:bg-destructive/10 hover:text-destructive"
+          >
+            <LogOut className="h-4 w-4" />
+            Cerrar sesión
+          </button>
         </div>
       </aside>
 
@@ -329,6 +341,15 @@ export function SettingsPage() {
               ))}
             </SelectContent>
           </Select>
+
+          {/* Mobile logout */}
+          <button
+            onClick={logout}
+            className="mt-2 flex w-full items-center gap-3 rounded-xl border border-border/50 bg-card/60 px-4 py-3 text-left text-sm font-bold text-muted-foreground backdrop-blur-md transition-colors hover:bg-destructive/10 hover:text-destructive dark:border-white/10"
+          >
+            <LogOut className="h-4 w-4" />
+            Cerrar sesión
+          </button>
         </div>
 
         {loadingProfile || loadingPrefs ? (
@@ -627,24 +648,6 @@ export function SettingsPage() {
                 <div>
                   <h1 className="text-2xl font-black text-foreground">Seguridad</h1>
                   <p className="text-sm text-muted-foreground">Protege tu cuenta</p>
-                </div>
-
-                {/* Cerrar sesión */}
-                <div className="rounded-2xl border border-border/70 bg-card/60 p-6 backdrop-blur-md dark:border-white/10">
-                  <div className="flex items-center justify-between">
-                    <div>
-                      <h3 className="text-sm font-bold text-foreground mb-1">Cerrar sesión</h3>
-                      <p className="text-xs text-muted-foreground">Salir de tu cuenta en este dispositivo</p>
-                    </div>
-                    <Button
-                      onClick={logout}
-                      variant="outline"
-                      className="rounded-full font-bold"
-                    >
-                      <LogOut className="mr-2 h-4 w-4" />
-                      Cerrar sesión
-                    </Button>
-                  </div>
                 </div>
 
                 {/* Cambiar contraseña */}

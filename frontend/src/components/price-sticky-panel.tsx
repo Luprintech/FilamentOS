@@ -101,7 +101,7 @@ export function PriceStickyDesktop({
   ].filter(r => r.value > 0);
 
   return (
-    <aside className="sticky top-6 hidden xl:flex flex-col gap-4 rounded-2xl border border-border/60 bg-card/90 shadow-[0_8px_32px_rgba(2,8,23,0.08)] dark:border-white/10 dark:shadow-[0_8px_32px_rgba(0,0,0,0.3)] overflow-hidden">
+    <aside className="sticky top-6 hidden lg:flex flex-col gap-4 rounded-2xl border border-border/60 bg-card/90 shadow-[0_8px_32px_rgba(2,8,23,0.08)] dark:border-white/10 dark:shadow-[0_8px_32px_rgba(0,0,0,0.3)] overflow-hidden">
 
       {/* ── Header ── */}
       <div className="flex items-center gap-2 px-5 pt-5">
@@ -252,12 +252,19 @@ export function PriceStickyDesktop({
 
 // ── Mobile bottom bar ─────────────────────────────────────────────────────────
 
-export function PriceStickyMobile({ calculations }: PriceStickyPanelProps) {
+export function PriceStickyMobile({ calculations, onOpenPdfCustomizer }: PriceStickyPanelProps & { onOpenPdfCustomizer?: () => void }) {
   const { t } = useTranslation();
   const { currency } = useCurrency();
   const fmt = (v: number) => formatMoney(v, currency);
   const [expanded, setExpanded] = React.useState(false);
   const hasData = calculations.finalPrice > 0;
+
+  // Signal to chatbot that price bar is visible → hides chatbot circle
+  React.useEffect(() => {
+    if (!hasData) return;
+    document.body.dataset.priceBarVisible = 'true';
+    return () => { delete document.body.dataset.priceBarVisible; };
+  }, [hasData]);
 
   if (!hasData) return null;
 
@@ -270,7 +277,7 @@ export function PriceStickyMobile({ calculations }: PriceStickyPanelProps) {
   ].filter(r => r.value > 0);
 
   return (
-    <div className="fixed bottom-0 left-0 right-0 z-30 xl:hidden print:hidden">
+    <div className="fixed bottom-0 left-0 right-0 z-50 lg:hidden print:hidden">
       <AnimatePresence>
         {expanded && (
           <motion.div
@@ -324,25 +331,43 @@ export function PriceStickyMobile({ calculations }: PriceStickyPanelProps) {
         )}
       </AnimatePresence>
 
-      <div className="flex items-center justify-between gap-3 border-t border-border/70 bg-card/95 backdrop-blur-md px-4 py-3 shadow-[0_-4px_16px_rgba(0,0,0,0.10)]">
-        <div>
-          <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+      <div className="flex items-center gap-2 border-t border-border/70 bg-card/95 backdrop-blur-md px-3 py-2.5 shadow-[0_-4px_16px_rgba(0,0,0,0.10)]">
+        {/* Price */}
+        <div className="min-w-0 flex-1">
+          <p className="text-[0.6rem] font-semibold uppercase tracking-wider text-muted-foreground">
             {t('cf_final_price')}
           </p>
           <AnimatedMoney
             value={calculations.finalPrice}
             currency={currency}
-            className="block text-xl font-black text-primary tabular-nums"
+            className="block text-lg font-black text-primary tabular-nums"
           />
         </div>
-        <button
-          type="button"
-          onClick={() => setExpanded(v => !v)}
-          className="flex items-center gap-1.5 rounded-lg border border-border/60 bg-background/70 px-3 py-1.5 text-xs font-medium text-foreground hover:bg-muted/50 transition-colors"
-        >
-          {expanded ? t('price_panel_hide', { defaultValue: 'Ocultar' }) : t('price_panel_show', { defaultValue: 'Ver desglose' })}
-          {expanded ? <ChevronDown className="h-3.5 w-3.5" /> : <ChevronUp className="h-3.5 w-3.5" />}
-        </button>
+
+        {/* PDF + Toggle */}
+        <div className="flex items-center gap-1.5">
+          {onOpenPdfCustomizer && (
+            <button
+              type="button"
+              onClick={onOpenPdfCustomizer}
+              className="flex items-center gap-1 rounded-lg border border-border/60 bg-background/70 px-2.5 py-1.5 text-xs font-medium text-foreground hover:bg-muted/50 transition-colors"
+              title={t('pdf_customizer_title', { defaultValue: 'Customizar PDF' })}
+            >
+              <svg className="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                <path strokeLinecap="round" strokeLinejoin="round" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+              </svg>
+              <span className="hidden sm:inline">{t('pdf_customizer_title', { defaultValue: 'PDF' })}</span>
+            </button>
+          )}
+          <button
+            type="button"
+            onClick={() => setExpanded(v => !v)}
+            className="flex items-center gap-1 rounded-lg border border-border/60 bg-background/70 px-2.5 py-1.5 text-xs font-medium text-foreground hover:bg-muted/50 transition-colors"
+          >
+            {expanded ? t('price_panel_hide', { defaultValue: 'Ocultar' }) : t('price_panel_show', { defaultValue: 'Detalle' })}
+            {expanded ? <ChevronDown className="h-3.5 w-3.5" /> : <ChevronUp className="h-3.5 w-3.5" />}
+          </button>
+        </div>
       </div>
     </div>
   );

@@ -934,23 +934,23 @@ export function CalculatorForm({ form, onProjectSaved, onCalculationsChange }: {
             </motion.div>
           </AnimatePresence>
           
-          {/* Navigation + secondary actions — una sola fila */}
-          <div className="pt-4">
+          {/* Navigation + secondary actions */}
+          <div className="pt-4 space-y-2">
+            {/* Top row: Atrás + Continuar (mobile side-by-side, desktop with center actions) */}
             <div className="flex items-center gap-2">
-              {/* Atrás */}
               <Button
                 type="button"
                 variant="secondary"
                 onClick={goPrev}
                 disabled={currentStep === 0}
-                className="rounded-xl gap-2 shrink-0"
+                className="rounded-xl gap-2"
               >
                 <ArrowLeft className="h-4 w-4" />
-                {t('wizard_back', { defaultValue: 'Atrás' })}
+                <span className="hidden sm:inline">{t('wizard_back', { defaultValue: 'Atrás' })}</span>
               </Button>
 
-              {/* Acciones secundarias — centro */}
-              <div className="flex flex-1 items-center justify-center gap-1">
+              {/* Desktop secondary actions — hidden on mobile */}
+              <div className="hidden sm:flex flex-1 items-center justify-center gap-1">
                 <Button
                   type="button"
                   size="sm"
@@ -984,20 +984,55 @@ export function CalculatorForm({ form, onProjectSaved, onCalculationsChange }: {
                 </Button>
               </div>
 
-              {/* Continuar */}
+              {/* Continuar / spacer */}
               {currentStep < totalSteps - 1 ? (
                 <Button
                   type="button"
                   variant="primary"
                   onClick={goNext}
-                  className="rounded-xl gap-2 shrink-0"
+                  className="rounded-xl gap-2 ml-auto sm:ml-0"
                 >
                   {t('wizard_next', { defaultValue: 'Continuar' })}
                   <ArrowRight className="h-4 w-4" />
                 </Button>
               ) : (
-                <div className="shrink-0 w-[7rem]" />
+                <div className="flex-1" />
               )}
+            </div>
+
+            {/* Mobile secondary actions — separate row */}
+            <div className="flex sm:hidden items-center justify-center gap-3">
+              <Button
+                type="button"
+                size="sm"
+                variant="outline"
+                onClick={handleSaveProject}
+                loading={isSaving}
+                className="rounded-xl gap-1.5 flex-1"
+              >
+                <Save className="h-4 w-4" />
+                {t('cf_save_project')}
+              </Button>
+              <Button
+                type="button"
+                size="sm"
+                variant="outline"
+                onClick={handleNewProject}
+                className="rounded-xl gap-1.5 flex-1"
+              >
+                <FilePlus className="h-4 w-4" />
+                {t('cf_new_project')}
+              </Button>
+              <Button
+                type="button"
+                size="sm"
+                variant="outline"
+                onClick={handleShare}
+                className="rounded-xl gap-1.5 flex-1"
+              >
+                <Share2 className="h-4 w-4" />
+                {t('cf_share')}
+              </Button>
             </div>
           </div>
         </div>

@@ -41,14 +41,14 @@ export function SugerenciasPage() {
         initial={{ opacity: 0, y: -20 }}
         animate={{ opacity: 1, y: 0 }}
         transition={{ duration: 0.5 }}
-        className="rounded-2xl border border-border/70 bg-card/60 p-8 shadow-[0_12px_36px_rgba(2,8,23,0.10)] backdrop-blur-md dark:border-white/10 dark:shadow-[0_18px_60px_rgba(0,0,0,0.22)]"
+        className="rounded-2xl border border-border/70 bg-card/60 p-5 sm:p-8 shadow-[0_12px_36px_rgba(2,8,23,0.10)] backdrop-blur-md dark:border-white/10 dark:shadow-[0_18px_60px_rgba(0,0,0,0.22)]"
       >
-        <div className="flex items-center gap-4 mb-4">
-          <div className="flex h-12 w-12 items-center justify-center rounded-full bg-primary/10">
-            <MessageSquarePlus className="h-6 w-6 text-primary" />
+        <div className="flex items-start gap-3 sm:items-center sm:gap-4 mb-4">
+          <div className="flex h-10 w-10 sm:h-12 sm:w-12 shrink-0 items-center justify-center rounded-full bg-primary/10">
+            <MessageSquarePlus className="h-5 w-5 sm:h-6 sm:w-6 text-primary" />
           </div>
           <div>
-            <h1 className="text-3xl font-black text-foreground">Sugerencias y reportes</h1>
+            <h1 className="text-2xl sm:text-3xl font-black text-foreground">Sugerencias y reportes</h1>
             <p className="text-sm text-muted-foreground">Ayúdanos a mejorar FilamentOS</p>
           </div>
         </div>
@@ -64,7 +64,7 @@ export function SugerenciasPage() {
         initial={{ opacity: 0, y: 20 }}
         animate={{ opacity: 1, y: 0 }}
         transition={{ duration: 0.5, delay: 0.1 }}
-        className="rounded-2xl border border-border/70 bg-card/60 p-8 shadow-[0_12px_36px_rgba(2,8,23,0.10)] backdrop-blur-md dark:border-white/10 dark:shadow-[0_18px_60px_rgba(0,0,0,0.22)]"
+        className="rounded-2xl border border-border/70 bg-card/60 p-5 sm:p-8 shadow-[0_12px_36px_rgba(2,8,23,0.10)] backdrop-blur-md dark:border-white/10 dark:shadow-[0_18px_60px_rgba(0,0,0,0.22)]"
       >
         {submitted ? (
           <div className="text-center py-12">

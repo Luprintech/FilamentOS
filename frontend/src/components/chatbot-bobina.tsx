@@ -122,6 +122,24 @@ export const ChatBotBobina = forwardRef<ChatBotHandle>((props, ref) => {
   const [emailError, setEmailError] = useState<string | null>(null);
   const [isVerifyingEmail, setIsVerifyingEmail] = useState(false);
 
+  // Ocultar el círculo del chatbot cuando la barra de precio flotante está visible
+  const [priceBarVisible, setPriceBarVisible] = useState(false);
+  useEffect(() => {
+    const check = () => {
+      const visible = document.body.dataset.priceBarVisible === 'true';
+      setPriceBarVisible(visible);
+      // Si el chatbot está abierto y aparece la barra de precio, cerrarlo
+      if (visible && isOpen) {
+        setIsOpen(false);
+        setView('categories');
+      }
+    };
+    check();
+    const observer = new MutationObserver(check);
+    observer.observe(document.body, { attributes: true, attributeFilter: ['data-price-bar-visible'] });
+    return () => observer.disconnect();
+  }, [isOpen]);
+
   const faqs = getFaqsForLanguage(i18n.resolvedLanguage || i18n.language || 'es');
 
   const handleCategoryClick = (category: FAQCategory) => {
@@ -279,9 +297,9 @@ export const ChatBotBobina = forwardRef<ChatBotHandle>((props, ref) => {
 
   return (
     <>
-      {/* Botón flotante */}
+      {/* Botón flotante — oculto cuando la barra de precio está visible */}
       <AnimatePresence>
-        {!isOpen && (
+        {!isOpen && !priceBarVisible && (
           <motion.div
             initial={{ scale: 0, opacity: 0 }}
             animate={{ scale: 1, opacity: 1 }}
@@ -317,6 +335,7 @@ export const ChatBotBobina = forwardRef<ChatBotHandle>((props, ref) => {
             exit={{ opacity: 0, y: 20, scale: 0.95 }}
             transition={{ duration: 0.2 }}
             className="fixed bottom-6 right-6 z-50 w-[380px] h-[600px] max-w-[calc(100vw-2rem)] max-h-[calc(100vh-2rem)] bg-background border-2 border-primary/20 rounded-2xl shadow-2xl flex flex-col overflow-hidden"
+            style={{ bottom: priceBarVisible ? 'calc(4.5rem + env(safe-area-inset-bottom, 0px))' : '1.5rem' }}
           >
             {/* Header */}
             <div className="bg-gradient-to-r from-primary to-primary/80 p-4 flex items-center justify-between text-primary-foreground">

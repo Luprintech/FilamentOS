@@ -28,7 +28,7 @@ export function AppNav() {
 
   return (
     <nav
-      className="mb-7 grid h-auto w-full grid-cols-5 rounded-2xl border border-border/70 bg-card/60 backdrop-blur-md p-1.5 print:hidden dark:border-white/10"
+      className="mb-7 grid h-auto w-full grid-cols-5 rounded-2xl border border-border/70 bg-card/60 backdrop-blur-md p-1 sm:p-1.5 print:hidden dark:border-white/10"
       aria-label="Navegación principal"
     >
       {items.map(({ to, icon, label, guestDisabled }) => {
@@ -37,12 +37,13 @@ export function AppNav() {
           <NavLink
             key={to}
             to={to}
+            title={label}
             aria-disabled={disabled}
             tabIndex={disabled ? -1 : undefined}
             onClick={disabled ? (e) => e.preventDefault() : undefined}
             className={({ isActive }) =>
               cn(
-                'flex items-center justify-center gap-0 rounded-xl py-2.5 text-sm font-bold transition-colors sm:gap-2',
+                'flex items-center justify-center gap-0 rounded-xl py-2 sm:py-2.5 text-sm font-bold transition-colors sm:gap-2',
                 (isActive
                   || (to === '/calculadora' && !!onProyectos)
                   || (to === '/bitacora' && location.pathname.startsWith('/bitacora/'))

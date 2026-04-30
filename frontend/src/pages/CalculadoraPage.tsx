@@ -90,7 +90,7 @@ export function CalculadoraPage() {
       />
 
       {/* ── Main content: form (65%) + sticky summary (35%) ── */}
-      <div className="xl:grid xl:grid-cols-[minmax(0,1fr)_360px] xl:items-start xl:gap-6 pb-24 xl:pb-0">
+      <div className="lg:grid lg:grid-cols-[minmax(0,1fr)_360px] lg:items-start lg:gap-6 pb-24 lg:pb-0">
         <CalculatorForm
           form={form}
           onProjectSaved={() => {}}
@@ -109,7 +109,7 @@ export function CalculadoraPage() {
       </div>
 
       {/* Mobile fixed bottom bar */}
-      <PriceStickyMobile calculations={calculations} />
+      <PriceStickyMobile calculations={calculations} onOpenPdfCustomizer={handleOpenPdfCustomizer} />
     </PageShell>
   );
 }

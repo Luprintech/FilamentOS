@@ -222,6 +222,7 @@ db.exec(`
     color_hex       TEXT,
     finish          TEXT,
     image_url       TEXT,
+    custom_image    TEXT,
     purchase_url    TEXT,
     attribution     TEXT NOT NULL DEFAULT 'Data from FilamentColors.xyz (CC BY 4.0)',
     metadata_json   TEXT NOT NULL DEFAULT '{}',
@@ -585,6 +586,9 @@ try { db.exec(`ALTER TABLE resources ADD COLUMN extra_tags TEXT NOT NULL DEFAULT
 // Add is_disabled column to tracker_pieces (safe migration)
 try { db.exec(`ALTER TABLE tracker_pieces ADD COLUMN is_disabled INTEGER NOT NULL DEFAULT 0`); } catch (_) { /* already exists */ }
 
+// Add custom_image column to filament_catalog (safe migration)
+try { db.exec(`ALTER TABLE filament_catalog ADD COLUMN custom_image TEXT`); } catch (_) { /* already exists */ }
+
 // ── Email auth migrations ─────────────────────────────────────────────────────
 try { db.exec('ALTER TABLE users ADD COLUMN email_verified INTEGER NOT NULL DEFAULT 0'); } catch (_) { /* ya existe */ }
 
@@ -741,10 +745,15 @@ passport.use(
 passport.serializeUser((user, done) => done(null, (user as DbUser).id));
 
 passport.deserializeUser((id: unknown, done) => {
-  const user = db
-    .prepare('SELECT id, google_id, email, name, photo FROM users WHERE id = ?')
-    .get(id as string) as DbUser | undefined;
-  done(null, user ?? false);
+  try {
+    const user = db
+      .prepare('SELECT id, google_id, email, name, photo, password_hash, email_verified, pref_date_format, pref_length_unit, pref_weight_unit FROM users WHERE id = ?')
+      .get(id as string) as DbUser | undefined;
+    done(null, user ?? false);
+  } catch (error) {
+    console.error('[Passport] deserializeUser error:', error);
+    done(error);
+  }
 });
 
 // ── Express ───────────────────────────────────────────────────────────────────
@@ -1073,13 +1082,18 @@ if (process.env.NODE_ENV !== 'production') {
 }
 
 app.get('/api/auth/user', (req, res) => {
-  if (!req.isAuthenticated()) {
-    res.json({ user: null });
-    return;
+  try {
+    if (!req.isAuthenticated()) {
+      res.json({ user: null });
+      return;
+    }
+    const user = req.user as DbUser;
+    const authMethod = user.google_id ? 'google' : 'email';
+    res.json({ user: { ...user, password_hash: undefined, authMethod } });
+  } catch (error) {
+    console.error('[Auth] /api/auth/user error:', error);
+    res.status(500).json({ error: 'Error al obtener usuario' });
   }
-  const user = req.user as DbUser;
-  const authMethod = user.google_id ? 'google' : 'email';
-  res.json({ user: { ...user, password_hash: undefined, authMethod } });
 });
 
 // POST /api/auth/guest/start - Iniciar sesión como invitado
@@ -1966,6 +1980,7 @@ interface FilamentCatalogRow {
   color_hex: string | null;
   finish: string | null;
   image_url: string | null;
+  custom_image: string | null;
   purchase_url: string | null;
   attribution: string;
   metadata_json: string;
@@ -2007,6 +2022,7 @@ function mapCatalogItem(row: FilamentCatalogRow) {
     colorHex: row.color_hex,
     finish: row.finish,
     imageUrl: row.image_url,
+    customImage: row.custom_image,
     purchaseUrl: row.purchase_url,
     attribution: row.attribution,
     metadata: JSON.parse(row.metadata_json || '{}'),
@@ -2028,8 +2044,6 @@ async function syncFilamentCatalogFromFilamentColors() {
   ).run(now);
 
   const versionInfo = await fetchFilamentColorsVersionInfo();
-  const page = await fetchFilamentColorsSwatchesPage(1, 100);
-  const records = page.results.map(mapFilamentColorsSwatchToCatalogRecord);
 
   const insert = db.prepare(
     `INSERT INTO filament_catalog
@@ -2050,24 +2064,57 @@ async function syncFilamentCatalogFromFilamentColors() {
        updated_at = excluded.updated_at`
   );
 
-  for (const record of records) {
-    insert.run(
-      record.id,
-      record.source,
-      record.externalId,
-      record.slug,
-      record.brand,
-      record.material,
-      record.color,
-      record.colorHex,
-      record.finish,
-      record.imageUrl,
-      record.purchaseUrl,
-      record.metadataJson,
-      now,
-      now,
-      now
-    );
+  let totalImported = 0;
+  let currentPage = 1;
+  let expectedTotal = 0;
+
+  // Iterar todas las páginas hasta alcanzar el total reportado por la API
+  while (true) {
+    const pageData = await fetchFilamentColorsSwatchesPage(currentPage, 100);
+    
+    // En la primera página, capturar el total esperado
+    if (currentPage === 1) {
+      expectedTotal = pageData.count;
+      console.log(`[FilamentCatalog] Total esperado según API: ${expectedTotal}`);
+    }
+
+    const records = pageData.results.map(mapFilamentColorsSwatchToCatalogRecord);
+
+    // Si no hay resultados, terminar
+    if (records.length === 0) {
+      break;
+    }
+
+    for (const record of records) {
+      insert.run(
+        record.id,
+        record.source,
+        record.externalId,
+        record.slug,
+        record.brand,
+        record.material,
+        record.color,
+        record.colorHex,
+        record.finish,
+        record.imageUrl,
+        record.purchaseUrl,
+        record.metadataJson,
+        now,
+        now,
+        now
+      );
+    }
+
+    totalImported += records.length;
+    const progress = expectedTotal > 0 ? ((totalImported / expectedTotal) * 100).toFixed(1) : '?';
+    console.log(`[FilamentCatalog] Synced page ${currentPage}: ${records.length} records (total: ${totalImported} / ${expectedTotal} = ${progress}%)`);
+
+    // Terminar si ya importamos todo o si no hay más páginas
+    if (totalImported >= expectedTotal || !pageData.next) {
+      break;
+    }
+
+    currentPage++;
   }
 
   db.prepare(
@@ -2081,7 +2128,8 @@ async function syncFilamentCatalogFromFilamentColors() {
        last_error = NULL`
   ).run(versionInfo.dbVersion, versionInfo.dbLastModified, now, now);
 
-  return records.length;
+  console.log(`[FilamentCatalog] Sync complete: ${totalImported} filaments imported`);
+  return totalImported;
 }
 
 async function ensureInitialFilamentCatalogSeed() {
@@ -2145,17 +2193,109 @@ app.get('/api/inventory/spools', requireAuth, (req, res) => {
   res.json(rows.map(mapSpool));
 });
 
-app.get('/api/filament-catalog', requireAuth, (_req, res) => {
+app.get('/api/filament-catalog', requireAuth, (req, res) => {
   if (!FEATURE_GLOBAL_FILAMENT_CATALOG) {
     res.status(404).json({ error: 'Feature disabled' });
     return;
   }
 
-  const rows = db.prepare('SELECT * FROM filament_catalog ORDER BY brand ASC, material ASC, color ASC LIMIT 100').all() as FilamentCatalogRow[];
+  const { brand, material, color, page = '1', limit = '50' } = req.query as Record<string, string | undefined>;
+  const pageNum = Math.max(1, parseInt(page || '1', 10));
+  const limitNum = Math.min(10000, Math.max(1, parseInt(limit || '50', 10)));
+  const offset = (pageNum - 1) * limitNum;
+
+  // Construir query con filtros opcionales
+  const whereClauses: string[] = [];
+  const params: (string | number)[] = [];
+
+  if (brand) {
+    whereClauses.push('brand = ?');
+    params.push(brand);
+  }
+  if (material) {
+    whereClauses.push('material = ?');
+    params.push(material);
+  }
+  if (color) {
+    whereClauses.push('color LIKE ?');
+    params.push(`%${color}%`);
+  }
+
+  const whereClause = whereClauses.length > 0 ? `WHERE ${whereClauses.join(' AND ')}` : '';
+
+  // Contar total con filtros
+  const countQuery = `SELECT COUNT(*) as total FROM filament_catalog ${whereClause}`;
+  const totalRow = db.prepare(countQuery).get(...params) as { total: number };
+  const total = totalRow.total;
+
+  // Obtener items paginados
+  const query = `SELECT * FROM filament_catalog ${whereClause} ORDER BY brand ASC, material ASC, color ASC LIMIT ? OFFSET ?`;
+  const rows = db.prepare(query).all(...params, limitNum, offset) as FilamentCatalogRow[];
+
   res.json({
     items: rows.map(mapCatalogItem),
+    pagination: {
+      page: pageNum,
+      limit: limitNum,
+      total,
+      totalPages: Math.ceil(total / limitNum),
+    },
     attribution: 'Data from FilamentColors.xyz (CC BY 4.0)',
   });
+});
+
+app.get('/api/filament-catalog/metadata/filters', requireAuth, (_req, res) => {
+  if (!FEATURE_GLOBAL_FILAMENT_CATALOG) {
+    res.status(404).json({ error: 'Feature disabled' });
+    return;
+  }
+
+  const brands = db.prepare('SELECT DISTINCT brand FROM filament_catalog ORDER BY brand ASC').all() as Array<{ brand: string }>;
+  const materials = db.prepare('SELECT DISTINCT material FROM filament_catalog ORDER BY material ASC').all() as Array<{ material: string }>;
+
+  res.json({
+    brands: brands.map((row) => row.brand),
+    materials: materials.map((row) => row.material),
+  });
+});
+
+app.put('/api/filament-catalog/:id', requireAdmin, (req, res) => {
+  if (!FEATURE_GLOBAL_FILAMENT_CATALOG) {
+    res.status(404).json({ error: 'Feature disabled' });
+    return;
+  }
+
+  const { id } = req.params;
+  const { purchaseUrl, customImage } = req.body as { purchaseUrl?: string | null; customImage?: string | null };
+
+  const existing = db.prepare('SELECT * FROM filament_catalog WHERE id = ?').get(id) as FilamentCatalogRow | undefined;
+  if (!existing) {
+    res.status(404).json({ error: 'Catalog filament not found' });
+    return;
+  }
+
+  const now = new Date().toISOString();
+  const updates: string[] = [];
+  const values: (string | null)[] = [];
+
+  if (purchaseUrl !== undefined) {
+    updates.push('purchase_url = ?');
+    values.push(purchaseUrl || null);
+  }
+  if (customImage !== undefined) {
+    updates.push('custom_image = ?');
+    values.push(customImage || null);
+  }
+  updates.push('updated_at = ?');
+  values.push(now);
+  values.push(id);
+
+  if (updates.length > 1) { // más de solo updated_at
+    db.prepare(`UPDATE filament_catalog SET ${updates.join(', ')} WHERE id = ?`).run(...values);
+  }
+
+  const updated = db.prepare('SELECT * FROM filament_catalog WHERE id = ?').get(id) as FilamentCatalogRow;
+  res.json(mapCatalogItem(updated));
 });
 
 app.get('/api/filament-catalog/:id', requireAuth, (req, res) => {
@@ -2171,6 +2311,162 @@ app.get('/api/filament-catalog/:id', requireAuth, (req, res) => {
   }
 
   res.json(mapCatalogItem(row));
+});
+
+app.post('/api/filament-catalog/bulk-import', requireAdmin, (req, res) => {
+  if (!FEATURE_GLOBAL_FILAMENT_CATALOG) {
+    res.status(404).json({ error: 'Feature disabled' });
+    return;
+  }
+
+  const { filaments } = req.body as { filaments?: Array<{
+    brand: string;
+    material: string;
+    color: string;
+    colorHex?: string;
+    finish?: string;
+    purchaseUrl?: string;
+    imageUrl?: string;
+    metadata?: Record<string, unknown>;
+  }> };
+
+  if (!Array.isArray(filaments) || filaments.length === 0) {
+    res.status(400).json({ error: 'filaments array is required and cannot be empty' });
+    return;
+  }
+
+  const now = new Date().toISOString();
+  const insert = db.prepare(
+    `INSERT INTO filament_catalog
+      (id, source, external_id, slug, brand, material, color, color_hex, finish, image_url, purchase_url, metadata_json, last_seen_at, last_synced_at, updated_at)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+     ON CONFLICT(id) DO UPDATE SET
+       purchase_url = excluded.purchase_url,
+       image_url = excluded.image_url,
+       updated_at = excluded.updated_at`
+  );
+
+  let imported = 0;
+  const transaction = db.transaction(() => {
+    for (const fil of filaments) {
+      if (!fil.brand || !fil.material || !fil.color) continue;
+
+      const slug = `${fil.brand.toLowerCase()}-${fil.material.toLowerCase()}-${fil.color.toLowerCase()}`
+        .replace(/[^a-z0-9]+/g, '-')
+        .replace(/^-|-$/g, '');
+      const externalId = `manual-${Date.now()}-${Math.random().toString(36).slice(2, 9)}`;
+      const id = `manual:${externalId}`;
+
+      insert.run(
+        id,
+        'manual',
+        externalId,
+        slug,
+        fil.brand.trim(),
+        fil.material.trim(),
+        fil.color.trim(),
+        fil.colorHex?.trim() || '#cccccc',
+        fil.finish?.trim() || null,
+        fil.imageUrl?.trim() || null,
+        fil.purchaseUrl?.trim() || null,
+        JSON.stringify(fil.metadata || { manualEntry: true }),
+        now,
+        now,
+        now
+      );
+      imported++;
+    }
+  });
+
+  transaction();
+
+  res.json({ success: true, imported });
+});
+
+app.post('/api/filament-catalog', requireAdmin, (req, res) => {
+  if (!FEATURE_GLOBAL_FILAMENT_CATALOG) {
+    res.status(404).json({ error: 'Feature disabled' });
+    return;
+  }
+
+  const { brand, material, color, colorHex, finish, imageUrl, purchaseUrl } = req.body as {
+    brand?: string;
+    material?: string;
+    color?: string;
+    colorHex?: string;
+    finish?: string | null;
+    imageUrl?: string | null;
+    purchaseUrl?: string | null;
+  };
+
+  if (!brand || !brand.trim()) {
+    res.status(400).json({ error: 'brand is required' });
+    return;
+  }
+  if (!material || !material.trim()) {
+    res.status(400).json({ error: 'material is required' });
+    return;
+  }
+  if (!color || !color.trim()) {
+    res.status(400).json({ error: 'color is required' });
+    return;
+  }
+
+  const now = new Date().toISOString();
+  const slug = `${brand.toLowerCase()}-${material.toLowerCase()}-${color.toLowerCase()}`
+    .replace(/[^a-z0-9]+/g, '-')
+    .replace(/^-|-$/g, '');
+  const externalId = `manual-${Date.now()}-${Math.random().toString(36).slice(2, 9)}`;
+  const id = `manual:${externalId}`;
+
+  db.prepare(
+    `INSERT INTO filament_catalog
+      (id, source, external_id, slug, brand, material, color, color_hex, finish, image_url, purchase_url, metadata_json, last_seen_at, last_synced_at, updated_at)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+  ).run(
+    id,
+    'manual',
+    externalId,
+    slug,
+    brand.trim(),
+    material.trim(),
+    color.trim(),
+    colorHex?.trim() || '#cccccc',
+    finish?.trim() || null,
+    imageUrl?.trim() || null,
+    purchaseUrl?.trim() || null,
+    JSON.stringify({ manualEntry: true }),
+    now,
+    now,
+    now
+  );
+
+  const created = db.prepare('SELECT * FROM filament_catalog WHERE id = ?').get(id) as FilamentCatalogRow;
+  res.status(201).json(mapCatalogItem(created));
+});
+
+app.delete('/api/filament-catalog/:id', requireAdmin, (req, res) => {
+  if (!FEATURE_GLOBAL_FILAMENT_CATALOG) {
+    res.status(404).json({ error: 'Feature disabled' });
+    return;
+  }
+
+  const { id } = req.params;
+  const existing = db.prepare('SELECT * FROM filament_catalog WHERE id = ?').get(id) as FilamentCatalogRow | undefined;
+  
+  if (!existing) {
+    res.status(404).json({ error: 'Catalog filament not found' });
+    return;
+  }
+
+  // Solo permitir eliminar filamentos añadidos manualmente
+  if (!id.startsWith('manual:')) {
+    res.status(400).json({ error: 'Solo se pueden eliminar filamentos añadidos manualmente' });
+    return;
+  }
+
+  db.prepare('DELETE FROM filament_catalog WHERE id = ?').run(id);
+  res.json({ success: true });
 });
 
 app.post('/api/filament-catalog/sync', requireAdmin, async (_req, res) => {
@@ -2895,18 +3191,23 @@ function requireAdmin(
 }
 
 app.post('/api/lupe/login', (req, res) => {
-  const { user, pass } = req.body as { user?: string; pass?: string };
-  const adminUser = process.env.LUPE_ADMIN_USER || 'lupe';
-  const envPass = process.env.LUPE_ADMIN_PASS || '';
-  // Check for overridden password in settings, fall back to .env
-  const settingRow = db.prepare('SELECT value FROM lupe_settings WHERE key = ?').get('admin_pass') as { value: string } | undefined;
-  const adminPass = settingRow?.value || envPass;
-  if (!adminPass) { res.status(503).json({ error: 'Admin no configurado' }); return; }
-  if (user === adminUser && pass === adminPass) {
-    req.session.isAdmin = true;
-    res.json({ ok: true });
-  } else {
-    res.status(401).json({ error: 'Credenciales incorrectas' });
+  try {
+    const { user, pass } = req.body as { user?: string; pass?: string };
+    const adminUser = process.env.LUPE_ADMIN_USER || 'lupe';
+    const envPass = process.env.LUPE_ADMIN_PASS || '';
+    // Check for overridden password in settings, fall back to .env
+    const settingRow = db.prepare('SELECT value FROM lupe_settings WHERE key = ?').get('admin_pass') as { value: string } | undefined;
+    const adminPass = settingRow?.value || envPass;
+    if (!adminPass) { res.status(503).json({ error: 'Admin no configurado' }); return; }
+    if (user === adminUser && pass === adminPass) {
+      req.session.isAdmin = true;
+      res.json({ ok: true });
+    } else {
+      res.status(401).json({ error: 'Credenciales incorrectas' });
+    }
+  } catch (error) {
+    console.error('[Lupe] /api/lupe/login error:', error);
+    res.status(500).json({ error: 'Error al iniciar sesión admin' });
   }
 });
 
@@ -2916,7 +3217,12 @@ app.post('/api/lupe/logout', (req, res) => {
 });
 
 app.get('/api/lupe/me', (req, res) => {
-  res.json({ isAdmin: !!req.session.isAdmin });
+  try {
+    res.json({ isAdmin: !!req.session.isAdmin });
+  } catch (error) {
+    console.error('[Lupe] /api/lupe/me error:', error);
+    res.status(500).json({ error: 'Error al verificar sesión admin' });
+  }
 });
 
 app.put('/api/lupe/password', requireAdmin, (req, res) => {

@@ -4,7 +4,7 @@ import { Sun, Moon, Download, LogOut, FlaskConical, Menu, X, UserCircle2 } from 
 import { Loader2 } from 'lucide-react';
 import { useTheme } from 'next-themes';
 import { useTranslation } from 'react-i18next';
-import { motion } from 'framer-motion';
+import { motion, AnimatePresence } from 'framer-motion';
 import { Button } from '@/components/ui/button';
 import { Avatar, AvatarImage, AvatarFallback } from '@/components/ui/avatar';
 import { LanguageSelector } from '@/components/language-selector';
