@@ -9,6 +9,7 @@
     "start": "node dist/index.js",
     "typecheck": "tsc --noEmit",
     "seed": "tsx src/seed.ts",
+    "repair:tracker-costs": "node repair-tracker-piece-costs.js",
     "test": "vitest run"
   },
   "dependencies": {
