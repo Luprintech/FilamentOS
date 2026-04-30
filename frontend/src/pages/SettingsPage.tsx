@@ -328,14 +328,29 @@ export function SettingsPage() {
         <div className="md:hidden mb-6">
           <Select value={activeSection} onValueChange={(v) => setActiveSection(v as SectionKey)}>
             <SelectTrigger className="w-full">
-              <SelectValue />
+              {(() => {
+                const active = sidebarItems.find((i) => i.key === activeSection);
+                return active ? (
+                  <span className="flex items-center gap-2">
+                    {active.icon}
+                    {active.label}
+                  </span>
+                ) : (
+                  <SelectValue />
+                );
+              })()}
             </SelectTrigger>
             <SelectContent>
               {sidebarItems.map((item) => (
                 <SelectItem key={item.key} value={item.key}>
-                  <span className="flex items-center gap-2">
-                    {item.icon}
-                    {item.label}
+                  <span className="flex w-full items-center justify-between gap-2">
+                    <span className="flex items-center gap-2">
+                      {item.icon}
+                      {item.label}
+                    </span>
+                    {item.key === activeSection && (
+                      <Check className="h-4 w-4 text-primary" />
+                    )}
                   </span>
                 </SelectItem>
               ))}

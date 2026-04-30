@@ -4214,6 +4214,28 @@ app.post('/api/auth/reset-password', async (req, res) => {
 
 
 if (process.env.NODE_ENV !== 'test') {
+  // ── Frontend estático (producción) ───────────────────────────────────────────
+  // En producción, Express sirve los archivos compilados del frontend (React/Vite).
+  // Nginx proxy_pass envía todo a Express, así que necesitamos:
+  //   1. Servir archivos estáticos del /frontend/dist
+  //   2. Un catch-all SPA para que las rutas del frontend (calculadora, inventario, etc.) funcionen al recargar
+  const FRONTEND_DIST = path.resolve(__dirname, '../../frontend/dist');
+  if (fs.existsSync(FRONTEND_DIST)) {
+    app.use(express.static(FRONTEND_DIST));
+
+    app.get('*', (req, res) => {
+      // No interceptar rutas de API ni uploads
+      if (req.path.startsWith('/api/') || req.path.startsWith('/uploads/')) {
+        return res.status(404).json({ error: 'Not found' });
+      }
+      res.sendFile(path.join(FRONTEND_DIST, 'index.html'));
+    });
+
+    console.log(`✓ Sirviendo frontend estático desde ${FRONTEND_DIST}`);
+  } else {
+    console.log(`ℹ Frontend dist no encontrado en ${FRONTEND_DIST} — solo modo API`);
+  }
+
   void ensureInitialFilamentCatalogSeed().finally(() => {
     app.listen(PORT, () => {
       console.log(`✓ Servidor Express en http://localhost:${PORT}`);
