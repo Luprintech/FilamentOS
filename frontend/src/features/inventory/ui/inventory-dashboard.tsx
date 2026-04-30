@@ -180,12 +180,14 @@ export function InventoryDashboard({ userId, authLoading }: InventoryDashboardPr
       <div className="flex flex-wrap items-center justify-end gap-2">
         <Button
           variant="outline"
-          onClick={() => isGuest ? setLoginModalOpen(true) : setScannerOpen(true)}
-          className={`rounded-full font-bold ${isGuest ? 'cursor-not-allowed opacity-50' : ''}`}
-          title={isGuest ? 'Inicia sesión para gestionar tu inventario' : undefined}
+          disabled
+          onClick={() => {}}
+          className="cursor-not-allowed rounded-full font-bold opacity-50"
+          title="Próximamente"
         >
           <ScanLine className="mr-1.5 h-4 w-4" />
           <span className="hidden sm:inline">{t('scan_btn')}</span>
+          <span className="ml-1 hidden md:inline text-[0.65rem] font-semibold">· Próximamente</span>
         </Button>
         <Button
           onClick={handleOpenAdd}
