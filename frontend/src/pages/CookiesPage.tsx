@@ -1,7 +1,8 @@
 import { useEffect } from 'react';
-import { Cookie } from 'lucide-react';
+import { ArrowLeft, Cookie } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import { Link } from 'react-router-dom';
+import { Button } from '@/components/ui/button';
 import { Separator } from '@/components/ui/separator';
 import { motion } from 'framer-motion';
 
@@ -13,21 +14,35 @@ export function CookiesPage() {
   }, []);
 
   return (
-    <div className="max-w-4xl mx-auto space-y-8">
+    <div className="max-w-4xl mx-auto space-y-6 md:space-y-8">
+      {/* Botón volver */}
+      <motion.div
+        initial={{ opacity: 0, x: -20 }}
+        animate={{ opacity: 1, x: 0 }}
+        transition={{ duration: 0.4 }}
+      >
+        <Button asChild variant="outline" size="sm" className="gap-2 rounded-full">
+          <Link to="/">
+            <ArrowLeft className="h-4 w-4" />
+            {t('back_to_filamentos')}
+          </Link>
+        </Button>
+      </motion.div>
+
       {/* Header */}
       <motion.div
         initial={{ opacity: 0, y: -20 }}
         animate={{ opacity: 1, y: 0 }}
         transition={{ duration: 0.5 }}
-        className="rounded-2xl border border-border/70 bg-card/60 p-8 shadow-[0_12px_36px_rgba(2,8,23,0.10)] backdrop-blur-md dark:border-white/10 dark:shadow-[0_18px_60px_rgba(0,0,0,0.22)]"
+        className="rounded-2xl border border-border/70 bg-card/60 p-4 md:p-8 shadow-[0_12px_36px_rgba(2,8,23,0.10)] backdrop-blur-md dark:border-white/10 dark:shadow-[0_18px_60px_rgba(0,0,0,0.22)]"
       >
-        <div className="flex items-center gap-4">
-          <div className="flex h-12 w-12 items-center justify-center rounded-full bg-primary/10">
-            <Cookie className="h-6 w-6 text-primary" />
+        <div className="flex items-center gap-3 md:gap-4">
+          <div className="flex h-10 w-10 md:h-12 md:w-12 items-center justify-center rounded-full bg-primary/10 shrink-0">
+            <Cookie className="h-5 w-5 md:h-6 md:w-6 text-primary" />
           </div>
-          <div>
-            <h1 className="text-3xl font-black text-foreground">{t('cookies_title')}</h1>
-            <p className="text-sm text-muted-foreground">{t('cookies_updated')}</p>
+          <div className="min-w-0">
+            <h1 className="text-xl md:text-3xl font-black text-foreground leading-tight">{t('cookies_title')}</h1>
+            <p className="text-xs md:text-sm text-muted-foreground">{t('cookies_updated')}</p>
           </div>
         </div>
       </motion.div>
@@ -37,7 +52,7 @@ export function CookiesPage() {
         initial={{ opacity: 0, y: 20 }}
         animate={{ opacity: 1, y: 0 }}
         transition={{ duration: 0.5, delay: 0.1 }}
-        className="rounded-2xl border border-border/70 bg-card/60 p-8 shadow-[0_12px_36px_rgba(2,8,23,0.10)] backdrop-blur-md dark:border-white/10 dark:shadow-[0_18px_60px_rgba(0,0,0,0.22)]"
+        className="rounded-2xl border border-border/70 bg-card/60 p-4 md:p-8 shadow-[0_12px_36px_rgba(2,8,23,0.10)] backdrop-blur-md dark:border-white/10 dark:shadow-[0_18px_60px_rgba(0,0,0,0.22)]"
       >
         <div className="prose prose-sm dark:prose-invert max-w-none space-y-5 text-sm leading-relaxed">
           {/* Introducción */}

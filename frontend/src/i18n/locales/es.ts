@@ -176,10 +176,10 @@ const es = {
   cf_image_upload: 'Subir Imagen',
   cf_image_preview: 'Vista previa del proyecto',
   cf_image_hint: 'Añade una imagen para identificar tu proyecto guardado. Máx 10 MB.',
-  cf_gcode_title: 'Análisis de G-code / 3MF',
+  cf_gcode_title: 'Análisis de G-code',
   cf_gcode_analyzing: 'Analizando...',
   cf_gcode_upload: 'Subir G-code',
-  cf_gcode_hint: 'Sube tu archivo .gcode o .3mf para rellenar automáticamente el tiempo y el filamento.',
+  cf_gcode_hint: 'Sube tu archivo .gcode para rellenar automáticamente el tiempo y el filamento.',
   cf_print_time: 'Tiempo de Impresión',
   cf_hours: 'Horas',
   cf_minutes: 'Minutos',
@@ -290,6 +290,7 @@ const es = {
   social_youtube_label: 'Canal de YouTube de Luprintech',
   social_instagram_label: 'Perfil de Instagram de Luprintech',
   social_tiktok_label: 'Perfil de TikTok de Luprintech',
+  back_to_filamentos: 'Volver a FilamentOS',
   privacy_title: 'Política de Privacidad y Cookies',
   privacy_updated: 'Última actualización: marzo de 2025',
   privacy_section1_title: '1. Responsable del tratamiento',
@@ -485,6 +486,11 @@ const es = {
   // Extra
   login_by: 'by Luprintech',
   install_title: 'Instalar aplicación',
+  // Android install banner
+  android_install_subtitle: 'Instala la app en tu Android',
+  android_install_desc: 'Instala FilamentOS en tu dispositivo para acceder rápidamente sin necesidad de navegador.',
+  android_install_button: 'Instalar FilamentOS',
+  android_install_dismiss: 'No volver a mostrar',
   // Tabs
   tab_statistics: 'Estadísticas',
   tab_inventory: 'Inventario',

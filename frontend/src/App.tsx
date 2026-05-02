@@ -10,6 +10,7 @@ import { QueryProvider } from '@/components/query-provider';
 import { CookieBanner } from '@/components/cookie-banner';
 import { ChatBotBobina, ChatBotHandle } from '@/components/chatbot-bobina';
 import { IosInstallBanner } from '@/components/ios-install-banner';
+import { AndroidInstallBanner } from '@/components/android-install-banner';
 import { useCookieConsent } from '@/hooks/use-cookie-consent';
 import { AppLayout } from '@/components/app-layout';
 import { HomePage } from '@/pages/HomePage';
@@ -139,6 +140,7 @@ function AppRoutes() {
       {!accepted && <CookieBanner onAccept={accept} />}
       <ChatBotBobina ref={chatBotRef} />
       <IosInstallBanner />
+      <AndroidInstallBanner />
     </>
   );
 }

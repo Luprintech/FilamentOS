@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { User, Settings, Shield, Globe, DollarSign, Palette, Ruler, Scale, KeyRound, Trash2, Mail, ShieldCheck, FolderOpen, Layers, Package, Loader2, Check, AlertTriangle, X, LogOut, Camera, Upload } from 'lucide-react';
+import { useNavigate } from 'react-router-dom';
+import { User, Settings, Shield, Globe, DollarSign, Palette, Ruler, Scale, KeyRound, Trash2, Mail, ShieldCheck, FolderOpen, Layers, Package, Loader2, Check, AlertTriangle, X, LogOut, Camera, Upload, ArrowLeft } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue, SelectGroup, SelectLabel } from '@/components/ui/select';
@@ -88,6 +89,7 @@ function StatPill({ icon, label, value }: { icon: React.ReactNode; label: string
 // ── Main component ────────────────────────────────────────────────────────────
 
 export function SettingsPage() {
+  const navigate = useNavigate();
   const { user, logout } = useAuth();
   const { i18n, t } = useTranslation();
   const { resolvedTheme, setTheme } = useTheme();
@@ -326,6 +328,16 @@ export function SettingsPage() {
       <div className="flex-1">
         {/* Mobile selector */}
         <div className="md:hidden mb-6">
+          {/* Back button */}
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={() => navigate(-1)}
+            className="mb-3 gap-2 pl-0 font-bold text-muted-foreground hover:text-foreground"
+          >
+            <ArrowLeft className="h-4 w-4" />
+            {t('back_to_filamentos')}
+          </Button>
           <Select value={activeSection} onValueChange={(v) => setActiveSection(v as SectionKey)}>
             <SelectTrigger className="w-full">
               {(() => {
