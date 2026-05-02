@@ -35,6 +35,7 @@ export async function apiGetStats(filters: Omit<StatsFilters, 'preset'>): Promis
  */
 export async function apiGetStatsPieces(
   filters: Pick<StatsFilters, 'from' | 'to' | 'projectId' | 'status' | 'source'>,
+  options?: { signal?: AbortSignal },
 ): Promise<StatsPiecesResponse> {
   const params = new URLSearchParams({
     from: filters.from,
@@ -47,6 +48,7 @@ export async function apiGetStatsPieces(
   const res = await fetch(`${API_BASE}/api/stats/pieces?${params.toString()}`, {
     method: 'GET',
     credentials: 'include',
+    signal: options?.signal,
   });
 
   if (!res.ok) {

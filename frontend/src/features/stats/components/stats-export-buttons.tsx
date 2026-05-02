@@ -1,6 +1,6 @@
-import { useEffect, useRef, useState } from 'react';
+import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { Download, ChevronDown, Loader2, Check, Table2 } from 'lucide-react';
+import { Download, Loader2, Check, Table2 } from 'lucide-react';
 import * as XLSX from 'xlsx';
 import { apiGetStatsPieces } from '../api/stats-api';
 import type { StatsResponse, StatsPieceDetail } from '../types';
@@ -17,6 +17,28 @@ type ExportState = 'idle' | 'loading' | 'done' | 'error';
 
 function buildFilename(filters: StatsFilters): string {
   return `filamentOS_${filters.from.replace(/-/g, '')}-${filters.to.replace(/-/g, '')}.xlsx`;
+}
+
+async function fetchPiecesForExport(filters: StatsFilters): Promise<StatsPieceDetail[]> {
+  const controller = new AbortController();
+  const timeout = window.setTimeout(() => controller.abort(), 8000);
+
+  try {
+    const piecesRes = await apiGetStatsPieces(
+      {
+        from:      filters.from,
+        to:        filters.to,
+        projectId: filters.projectId,
+        status:    filters.status,
+        source:    filters.source,
+      },
+      { signal: controller.signal },
+    );
+
+    return piecesRes.pieces || [];
+  } finally {
+    window.clearTimeout(timeout);
+  }
 }
 
 // ── Cell style helpers ────────────────────────────────────────────────────────
@@ -220,105 +242,66 @@ function buildPiecesSheet(pieces: StatsPieceDetail[]): XLSX.WorkSheet {
 // ── Component ─────────────────────────────────────────────────────────────────
 
 export function StatsExportButtons({ data, filters }: StatsExportButtonsProps) {
-  const { t }                     = useTranslation();
-  const [open, setOpen]           = useState(false);
-  const [state, setState]         = useState<ExportState>('idle');
-  const menuRef                   = useRef<HTMLDivElement>(null);
-  const [menuPosition, setMenuPosition] = useState<{ top: number; right: number } | null>(null);
-
-  function closeMenu() { setOpen(false); }
-
-  useEffect(() => {
-    if (!open || !menuRef.current) return;
-    const rect = menuRef.current.getBoundingClientRect();
-    setMenuPosition({
-      top: rect.bottom + 8,
-      right: Math.max(16, window.innerWidth - rect.right),
-    });
-  }, [open]);
+  const { t } = useTranslation();
+  const [state, setState] = useState<ExportState>('idle');
 
   async function handleExport() {
+    console.log('[Export] handleExport started');
     setState('loading');
-    closeMenu();
     try {
-      // Fetch piece details respecting current filters
-      const piecesRes = await apiGetStatsPieces({
-        from:      filters.from,
-        to:        filters.to,
-        projectId: filters.projectId,
-        status:    filters.status,
-        source:    filters.source,
-      });
+      let pieces: StatsPieceDetail[] = [];
 
+      // Fetch piece details respecting current filters. If this endpoint is slow
+      // or fails, the export must still continue with the aggregated stats.
+      try {
+        console.log('[Export] fetching pieces...');
+        pieces = await fetchPiecesForExport(filters);
+        console.log('[Export] pieces fetched:', pieces.length);
+      } catch (pieceErr) {
+        console.warn('[Export] Failed to fetch pieces, continuing with empty list:', pieceErr);
+      }
+
+      console.log('[Export] building workbook...');
       const wb = XLSX.utils.book_new();
-      wb.Props = { Title: 'FilamentOS — Estadísticas', Author: 'FilamentOS', CreatedDate: new Date() };
+      wb.Props = { Title: 'FilamentOS - Estadisticas', Author: 'FilamentOS', CreatedDate: new Date() };
 
-      XLSX.utils.book_append_sheet(wb, buildSummarySheet(data, filters),     '📊 Resumen');
-      XLSX.utils.book_append_sheet(wb, buildTimeSeriesSheet(data),           '📈 Evolución');
-      XLSX.utils.book_append_sheet(wb, buildProjectSheet(data),              '📁 Por Proyecto');
-      XLSX.utils.book_append_sheet(wb, buildPiecesSheet(piecesRes.pieces),   '📋 Piezas');
+      XLSX.utils.book_append_sheet(wb, buildSummarySheet(data, filters),     'Resumen');
+      XLSX.utils.book_append_sheet(wb, buildTimeSeriesSheet(data),           'Evolucion');
+      XLSX.utils.book_append_sheet(wb, buildProjectSheet(data),              'Por Proyecto');
+      XLSX.utils.book_append_sheet(wb, buildPiecesSheet(pieces),             'Piezas');
 
-      XLSX.writeFile(wb, buildFilename(filters), { bookType: 'xlsx', compression: true });
+      console.log('[Export] writing XLSX...');
+      XLSX.writeFile(wb, buildFilename(filters), { compression: true });
+      console.log('[Export] download triggered');
       setState('done');
-    } catch {
+    } catch (err) {
+      console.error('[Export] Export error:', err);
       setState('error');
     }
-    setTimeout(() => setState('idle'), 2500);
+    window.setTimeout(() => setState('idle'), 3000);
   }
 
   const isLoading = state === 'loading';
 
   return (
-    <div className="relative" ref={menuRef}>
+    <div className="relative">
       <button
         type="button"
-        disabled={isLoading}
-        onClick={() => setOpen((o) => !o)}
+        disabled={state !== 'idle'}
+        onClick={() => void handleExport()}
         className="flex items-center gap-2 rounded-full border border-border/60 bg-card/80 px-4 py-2 text-xs font-bold text-foreground transition-colors hover:bg-muted/60 disabled:cursor-not-allowed disabled:opacity-50"
       >
-        {isLoading ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Download className="h-3.5 w-3.5" />}
-        {t('stats_export_main')}
-        <ChevronDown className={`h-3.5 w-3.5 transition-transform ${open ? 'rotate-180' : ''}`} />
+        {isLoading ? (
+          <Loader2 className="h-3.5 w-3.5 animate-spin" />
+        ) : state === 'done' ? (
+          <Check className="h-3.5 w-3.5 text-emerald-500" />
+        ) : state === 'error' ? (
+          <Table2 className="h-3.5 w-3.5 text-destructive" />
+        ) : (
+          <Download className="h-3.5 w-3.5" />
+        )}
+        {isLoading ? 'Exportando...' : t('stats_export_main')}
       </button>
-
-      {open && (
-        <>
-          <div className="fixed inset-0 z-40" onClick={closeMenu} />
-          <div
-            className="fixed z-[60] w-72 max-w-[calc(100vw-2rem)] overflow-hidden rounded-[16px] border border-border/60 bg-card/95 shadow-2xl backdrop-blur-md"
-            style={menuPosition ? { top: menuPosition.top, right: menuPosition.right } : { top: 80, right: 16 }}
-          >
-            <p className="border-b border-border/40 px-4 py-2.5 text-[0.65rem] font-bold uppercase tracking-wider text-muted-foreground">
-              {t('stats_export_choose')}
-            </p>
-
-            <button
-              type="button"
-              onClick={handleExport}
-              disabled={state !== 'idle'}
-              className="flex w-full items-start gap-3 px-4 py-3 text-left transition-colors hover:bg-muted/50 disabled:cursor-not-allowed"
-            >
-              <span className={`mt-0.5 shrink-0 ${state === 'done' ? 'text-emerald-500' : state === 'error' ? 'text-destructive' : 'text-primary'}`}>
-                {state === 'loading' ? <Loader2 className="h-4 w-4 animate-spin" />
-                 : state === 'done'  ? <Check className="h-4 w-4" />
-                 : <Table2 className="h-4 w-4" />}
-              </span>
-              <span>
-                <p className="text-xs font-bold text-foreground">Exportar Excel completo</p>
-                <p className="text-[0.68rem] text-muted-foreground">
-                  Resumen · Evolución · Proyectos · <strong>Detalle de piezas</strong>
-                </p>
-              </span>
-            </button>
-
-            <div className="border-t border-border/40 px-4 py-2.5">
-              <p className="text-[0.62rem] text-muted-foreground/60">
-                .xlsx · 4 hojas · Filtros aplicados · Excel &amp; LibreOffice
-              </p>
-            </div>
-          </div>
-        </>
-      )}
     </div>
   );
 }
