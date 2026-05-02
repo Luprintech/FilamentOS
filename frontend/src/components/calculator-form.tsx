@@ -936,7 +936,7 @@ export function CalculatorForm({ form, onProjectSaved, onCalculationsChange, onO
           </AnimatePresence>
           
           {/* Navigation + secondary actions — mobile-first, no overflow */}
-          <div className="w-full max-w-full overflow-hidden pt-4 pb-[calc(120px+env(safe-area-inset-bottom,0px))] lg:pb-0 space-y-3">
+          <div className="w-full max-w-full overflow-hidden pt-4 pb-[calc(60px+env(safe-area-inset-bottom,0px))] lg:pb-0 space-y-3">
             {/* Customizar PDF — mobile/tablet only, step 4 */}
             {currentStep === 3 && onOpenPdfCustomizer && (
               <Button

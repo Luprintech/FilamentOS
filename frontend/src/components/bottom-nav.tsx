@@ -36,7 +36,7 @@ export function BottomNav() {
   return (
     <nav
       ref={navRef}
-      className="fixed bottom-[calc(env(safe-area-inset-bottom,0px)+12px)] left-1/2 z-[999] -translate-x-1/2 flex w-[calc(100vw-24px)] max-w-[430px] items-center justify-evenly gap-0.5 rounded-[24px] border border-white/10 bg-black/78 px-2 py-1.5 backdrop-blur-2xl print:hidden lg:hidden md:max-w-[720px] md:gap-1 md:px-3"
+      className="fixed bottom-0 left-0 right-0 z-[999] flex w-full items-center justify-evenly gap-0 border-t border-white/10 bg-black/90 px-1 py-1 pb-[max(4px,env(safe-area-inset-bottom))] backdrop-blur-xl print:hidden lg:hidden"
       aria-label="Navegación inferior"
     >
       {items.map((item) => (
@@ -45,10 +45,10 @@ export function BottomNav() {
           to={item.to}
           className={({ isActive }) =>
             cn(
-              'flex flex-1 flex-col items-center justify-center gap-0.5 rounded-xl px-1 py-1 text-center font-semibold transition-all duration-200 md:px-2',
+              'flex flex-1 flex-col items-center justify-center gap-0.5 px-1 py-0.5 text-center font-semibold transition-colors duration-150',
               'text-[9px] sm:text-[10px] md:text-xs',
               isActive
-                ? 'bg-gradient-to-br from-purple-500/20 to-cyan-400/20 text-purple-300 shadow-[0_0_16px_rgba(168,85,247,0.25)]'
+                ? 'text-purple-400'
                 : 'text-muted-foreground hover:text-foreground',
             )
           }

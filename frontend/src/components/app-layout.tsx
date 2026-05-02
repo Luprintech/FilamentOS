@@ -22,7 +22,7 @@ export function AppLayout({ onOpenChatbot, onOpenChatbotHelp }: AppLayoutProps) 
   return (
     <main className="flex min-h-screen flex-col items-center px-4 pb-10 pt-6 sm:px-8 md:px-10">
       <GlobalBackground />
-      <div className="mobile-app-container relative mx-auto min-h-[100dvh] w-full max-w-[430px] overflow-x-hidden pb-[100px] md:max-w-[768px] md:pb-[120px] lg:max-w-[1400px] lg:pb-10">
+      <div className="mobile-app-container relative mx-auto min-h-[100dvh] w-full max-w-[430px] overflow-x-hidden pb-[60px] md:max-w-[768px] md:pb-[60px] lg:max-w-[1400px] lg:pb-10">
         <AppHeader />
         <AppNav />
         <Outlet />
