@@ -36,7 +36,7 @@ export function BottomNav() {
   return (
     <nav
       ref={navRef}
-      className="fixed bottom-0 left-0 right-0 z-[999] flex w-full items-center justify-evenly gap-0 border-t border-white/10 bg-black/90 px-1 py-1 pb-[max(4px,env(safe-area-inset-bottom))] backdrop-blur-xl print:hidden lg:hidden"
+      className="fixed bottom-0 left-0 right-0 z-[999] flex w-full items-center justify-evenly gap-0 border-t border-border bg-background/90 px-2 py-2 pb-[max(8px,env(safe-area-inset-bottom))] backdrop-blur-xl print:hidden lg:hidden"
       aria-label="Navegación inferior"
     >
       {items.map((item) => (
