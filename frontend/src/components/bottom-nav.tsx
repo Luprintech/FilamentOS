@@ -1,8 +1,33 @@
+import { useEffect, useRef, useState } from 'react';
 import { NavLink } from 'react-router-dom';
 import { Calculator, BarChart3, LineChart, Package, Globe } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
 export function BottomNav() {
+  const [viewportOffset, setViewportOffset] = useState(0);
+
+  // Chrome iOS oculta la barra de navegación al hacer scroll, cambiando
+  // visualViewport.height. Compensamos la diferencia para que la barra
+  // siempre quede pegada al borde inferior real de la pantalla.
+  useEffect(() => {
+    const vv = window.visualViewport;
+    if (!vv) return;
+
+    const update = () => {
+      const diff = window.innerHeight - vv.height;
+      setViewportOffset(diff);
+    };
+
+    vv.addEventListener('resize', update);
+    window.addEventListener('orientationchange', update);
+    update();
+
+    return () => {
+      vv.removeEventListener('resize', update);
+      window.removeEventListener('orientationchange', update);
+    };
+  }, []);
+
   const items = [
     { to: '/calculadora', icon: Calculator, label: 'Calculadora' },
     { to: '/bitacora', icon: BarChart3, label: 'Bitácora' },
@@ -16,7 +41,8 @@ export function BottomNav() {
     // donde position: fixed no se recalcula al ocultar/mostrar la barra de dirección
     <div className="fixed inset-0 z-[999] pointer-events-none print:hidden lg:hidden">
       <nav
-        className="absolute bottom-0 left-0 right-0 flex w-full items-center justify-evenly gap-0 border-t border-border bg-background/90 px-2 py-2 pb-[max(8px,env(safe-area-inset-bottom))] backdrop-blur-xl pointer-events-auto"
+        className="absolute left-0 right-0 flex w-full items-center justify-evenly gap-0 border-t border-border bg-background/90 px-2 py-2 backdrop-blur-xl pointer-events-auto"
+        style={{ bottom: viewportOffset }}
         aria-label="Navegación inferior"
       >
         {items.map((item) => (
