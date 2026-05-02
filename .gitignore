@@ -63,3 +63,5 @@ deploy/
 backend/*.log
 nul
 openspec/
+".roo/"  
+".windsurf/" 
