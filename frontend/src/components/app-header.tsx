@@ -134,14 +134,14 @@ export function AppHeader() {
         initial={{ opacity: 0, y: -10 }}
         animate={{ opacity: 1, y: 0 }}
         transition={{ duration: 0.4 }}
-        className="mb-8 rounded-2xl border border-border/70 bg-card/60 p-4 shadow-[0_12px_36px_rgba(2,8,23,0.10)] backdrop-blur-md print:hidden dark:border-white/10 dark:shadow-[0_18px_60px_rgba(0,0,0,0.22)] sm:p-5"
-      >
+        className="mb-4 sm:mb-8 rounded-2xl border border-border/70 bg-card/60 p-3 sm:p-4 shadow-[0_12px_36px_rgba(2,8,23,0.10)] backdrop-blur-md print:hidden dark:border-white/10 dark:shadow-[0_18px_60px_rgba(0,0,0,0.22)] pt-[max(0.75rem,env(safe-area-inset-top))] sm:pt-[max(1rem,env(safe-area-inset-top))]"
+        >
         <div className="flex items-center justify-between gap-3">
           {/* Logo */}
           <div className="flex items-center gap-3">
-            <img src={logoSrc} alt={t('logo_alt')} width={50} height={50} className="rounded-full shadow-lg border border-gray-200" />
+            <img src={logoSrc} alt={t('logo_alt')} width={50} height={50} className="h-8 w-8 rounded-full shadow-lg border border-gray-200 sm:h-[50px] sm:w-[50px]" />
             <div className="text-left">
-              <h1 className="font-headline text-xl font-bold tracking-tighter text-primary sm:text-2xl md:text-3xl">
+              <h1 className="font-headline text-lg sm:text-xl md:text-3xl font-bold tracking-tighter text-primary">
                 {t('app_title')}
               </h1>
               {isGuest ? (

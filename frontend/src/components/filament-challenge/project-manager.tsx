@@ -225,6 +225,8 @@ interface ActionButtonProps {
   variant?: 'outline' | 'default';
   destructive?: boolean;
   actionMode: GridActionMode;
+  /** Cuando true, usa comportamiento responsive: icon-only en móvil, texto desde sm */
+  responsiveIconOnly?: boolean;
 }
 
 function ActionButton({
@@ -235,9 +237,43 @@ function ActionButton({
   variant = 'outline',
   destructive = false,
   actionMode,
+  responsiveIconOnly,
 }: ActionButtonProps) {
   const compact = actionMode === 'compact';
   const medium = actionMode === 'medium';
+
+  // Modo responsive: icon-only en móvil, texto desde sm
+  if (responsiveIconOnly) {
+    const button = (
+      <Button
+        variant={variant}
+        size="sm"
+        className={cn(
+          'rounded-full font-bold',
+          'h-[40px] w-[40px] sm:h-9 sm:w-auto sm:px-3',
+          destructive && 'border-destructive/30 bg-destructive/10 text-destructive hover:bg-destructive/20 hover:text-destructive',
+          variant === 'default' && 'challenge-btn-primary font-extrabold'
+        )}
+        onClick={onClick}
+        aria-label={label}
+        title={label}
+      >
+        <span className="flex items-center justify-center gap-1.5">
+          {icon}
+          <span className="hidden sm:inline">{shortLabel ?? label}</span>
+        </span>
+      </Button>
+    );
+    return (
+      <TooltipProvider>
+        <Tooltip>
+          <TooltipTrigger asChild>{button}</TooltipTrigger>
+          <TooltipContent side="top"><p>{label}</p></TooltipContent>
+        </Tooltip>
+      </TooltipProvider>
+    );
+  }
+
   const content = compact ? icon : (
     <>
       {icon}
@@ -256,6 +292,8 @@ function ActionButton({
         variant === 'default' && 'challenge-btn-primary font-extrabold'
       )}
       onClick={onClick}
+      aria-label={label}
+      title={label}
     >
       <span className={cn('flex items-center gap-1.5', compact && 'justify-center')}>{content}</span>
     </Button>
@@ -468,27 +506,29 @@ export function ProjectManager({
             ];
 
             const actions = (
-              // stopPropagation: evita que los botones propaguen el click del card
-              <div className="flex flex-wrap items-center gap-2" onClick={(e) => e.stopPropagation()}>
-                  {onGeneratePdf && (
-                    <ActionButton
-                      icon={<FileText className="h-4 w-4" />}
-                      label="Generar PDF"
-                      shortLabel="PDF"
-                      onClick={() => onGeneratePdf(project)}
-                      actionMode={actionMode}
-                    />
-                  )}
-                  <ActionButton
-                    icon={<Trash2 className="h-4 w-4" />}
-                    label={t('delete')}
-                    shortLabel={t('delete')}
-                    onClick={() => guestMode ? onGuestAction?.() : setDeleteTarget(project)}
-                    destructive
-                    actionMode={actionMode}
-                  />
-              </div>
-            );
+               // stopPropagation: evita que los botones propaguen el click del card
+               <div className="flex flex-shrink-0 items-center gap-2" onClick={(e) => e.stopPropagation()}>
+                   {onGeneratePdf && (
+                     <ActionButton
+                       icon={<FileText className="h-4 w-4" />}
+                       label="Generar PDF"
+                       shortLabel="PDF"
+                       onClick={() => onGeneratePdf(project)}
+                       actionMode={actionMode}
+                       responsiveIconOnly={viewMode === 'list'}
+                     />
+                   )}
+                   <ActionButton
+                     icon={<Trash2 className="h-4 w-4" />}
+                     label={t('delete')}
+                     shortLabel={t('delete')}
+                     onClick={() => guestMode ? onGuestAction?.() : setDeleteTarget(project)}
+                     destructive
+                     actionMode={actionMode}
+                     responsiveIconOnly={viewMode === 'list'}
+                   />
+               </div>
+             );
 
             const progressBar = (
               <div className="h-1.5 w-full overflow-hidden rounded-full bg-white/[0.07]">
@@ -501,38 +541,39 @@ export function ProjectManager({
               return (
                 <div
                   key={project.id}
-                  className="challenge-panel flex cursor-pointer items-center gap-4 rounded-[18px] border border-white/[0.10] bg-white/[0.03] p-4 transition-shadow hover:shadow-[0_4px_20px_rgba(0,0,0,0.15)]"
+                  className="challenge-panel flex cursor-pointer items-center gap-3 rounded-[18px] border border-white/[0.10] bg-white/[0.03] p-3 sm:p-4 transition-shadow hover:shadow-[0_4px_20px_rgba(0,0,0,0.15)]"
                   onClick={() => onOpenProject(project.id)}
                 >
-                  {/* Thumbnail */}
-                  <div className="relative h-16 w-16 shrink-0 overflow-hidden rounded-[14px] bg-white/[0.05]">
+                  {/* Thumbnail — izquierda, flex-shrink-0 */}
+                  <div className="relative h-14 w-14 shrink-0 overflow-hidden rounded-[14px] bg-white/[0.05] sm:h-16 sm:w-16">
                     {project.coverImage
                       ? <img src={project.coverImage} alt={project.title} className="h-full w-full object-cover" />
                       : <div className="flex h-full w-full items-center justify-center"><Target className="h-6 w-6 text-white/20" /></div>
                     }
                   </div>
 
-                  {/* Info */}
-                  <div className="min-w-0 flex-1 space-y-2">
+                  {/* Info — centro, flex-1 + min-w-0 para evitar cortes */}
+                  <div className="min-w-0 flex-1 space-y-1.5 sm:space-y-2">
                     <div className="flex items-start justify-between gap-2">
-                      <div className="min-w-0">
-                        <h3 className="truncate text-sm font-black text-foreground">{project.title}</h3>
-                        {project.description && <p className="truncate text-xs text-muted-foreground">{project.description}</p>}
+                      <div className="min-w-0 max-w-full">
+                        <h3 className="truncate text-sm font-black text-foreground" title={project.title}>{project.title}</h3>
+                        {project.description && <p className="truncate text-xs text-muted-foreground" title={project.description}>{project.description}</p>}
                       </div>
                       <span className="shrink-0 rounded-full border border-white/[0.08] bg-white/[0.05] px-2 py-0.5 text-[0.68rem] font-extrabold text-[hsl(var(--challenge-blue))]">
                         {progressPct}%
                       </span>
                     </div>
                     {progressBar}
-                    <div className="flex flex-wrap gap-x-4 gap-y-0.5">
+                    <div className="flex flex-wrap gap-x-3 gap-y-0.5 sm:gap-x-4">
                       {metrics.map((m) => (
-                        <span key={m.label} className={`flex items-center gap-1 text-[0.7rem] font-bold ${m.color}`}>
+                        <span key={m.label} className={`flex items-center gap-1 text-[0.68rem] font-bold sm:text-[0.7rem] ${m.color}`}>
                           {m.icon}{m.value}
                         </span>
                       ))}
                     </div>
                   </div>
 
+                  {/* Acciones — derecha, flex-shrink-0 */}
                   {actions}
                 </div>
               );

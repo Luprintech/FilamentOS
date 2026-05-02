@@ -95,6 +95,7 @@ export function CalculadoraPage() {
           form={form}
           onProjectSaved={() => {}}
           onCalculationsChange={setCalculations}
+          onOpenPdfCustomizer={handleOpenPdfCustomizer}
         />
         <PriceStickyDesktop
           calculations={calculations}

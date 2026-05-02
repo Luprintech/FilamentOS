@@ -277,7 +277,7 @@ export function PriceStickyMobile({ calculations, onOpenPdfCustomizer }: PriceSt
   ].filter(r => r.value > 0);
 
   return (
-    <div className="fixed bottom-0 left-0 right-0 z-50 lg:hidden print:hidden">
+    <div className="fixed bottom-0 left-0 right-0 z-40 max-w-[430px] mx-auto lg:hidden print:hidden md:z-50">
       <AnimatePresence>
         {expanded && (
           <motion.div

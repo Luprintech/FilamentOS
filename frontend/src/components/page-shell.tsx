@@ -41,7 +41,7 @@ export function PageShell({ children, className, innerRef }: PageShellProps) {
       initial={{ opacity: 0, y: 8 }}
       animate={{ opacity: 1, y: 0 }}
       transition={{ duration: 0.35 }}
-      className={cn('w-full space-y-6', className)}
+      className={cn('mx-auto w-full space-y-4 sm:space-y-6', className)}
     >
       {children}
     </motion.div>
@@ -129,7 +129,7 @@ export function PageHeader({
   return (
     <div
       className={cn(
-        'rounded-[28px] border border-border/70 bg-card/60 p-5 backdrop-blur-md shadow-[0_12px_36px_rgba(2,8,23,0.08)] dark:border-white/10 dark:shadow-[0_24px_80px_rgba(0,0,0,0.28)] sm:p-7',
+        'rounded-[24px] border border-white/10 bg-card/72 p-4 backdrop-blur-xl shadow-[0_12px_36px_rgba(2,8,23,0.08)] dark:border-white/10 dark:shadow-[0_24px_80px_rgba(0,0,0,0.28)] sm:p-5 md:p-7',
         className,
       )}
     >
@@ -145,7 +145,7 @@ export function PageHeader({
               {badge}
             </div>
           )}
-          <h1 className="challenge-gradient-text text-2xl font-black leading-none sm:text-4xl">
+          <h1 className="challenge-gradient-text text-xl sm:text-2xl md:text-4xl font-black leading-none">
             {title}
           </h1>
           {subtitle && (

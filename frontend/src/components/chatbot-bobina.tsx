@@ -305,7 +305,8 @@ export const ChatBotBobina = forwardRef<ChatBotHandle>((props, ref) => {
             animate={{ scale: 1, opacity: 1 }}
             exit={{ scale: 0, opacity: 0 }}
             transition={{ duration: 0.2 }}
-            className="fixed bottom-6 right-6 z-40"
+            className="fixed right-6 z-40"
+            style={{ bottom: 'calc(env(safe-area-inset-bottom,0px) + 104px)' }}
           >
             <Button
               onClick={() => setIsOpen(true)}
@@ -334,8 +335,8 @@ export const ChatBotBobina = forwardRef<ChatBotHandle>((props, ref) => {
             animate={{ opacity: 1, y: 0, scale: 1 }}
             exit={{ opacity: 0, y: 20, scale: 0.95 }}
             transition={{ duration: 0.2 }}
-            className="fixed bottom-6 right-6 z-50 w-[380px] h-[600px] max-w-[calc(100vw-2rem)] max-h-[calc(100vh-2rem)] bg-background border-2 border-primary/20 rounded-2xl shadow-2xl flex flex-col overflow-hidden"
-            style={{ bottom: priceBarVisible ? 'calc(4.5rem + env(safe-area-inset-bottom, 0px))' : '1.5rem' }}
+            className="fixed right-6 z-50 w-[380px] h-[600px] max-w-[calc(100vw-2rem)] max-h-[calc(100vh-2rem)] bg-background border-2 border-primary/20 rounded-2xl shadow-2xl flex flex-col overflow-hidden lg:bottom-8"
+            style={{ bottom: priceBarVisible ? 'calc(7.5rem + env(safe-area-inset-bottom, 0px))' : 'calc(env(safe-area-inset-bottom,0px) + 104px)' }}
           >
             {/* Header */}
             <div className="bg-gradient-to-r from-primary to-primary/80 p-4 flex items-center justify-between text-primary-foreground">

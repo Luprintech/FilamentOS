@@ -333,10 +333,11 @@ function CalcFilamentRow({ form, index, canRemove, activeSpools, currency, onRem
   );
 }
 
-export function CalculatorForm({ form, onProjectSaved, onCalculationsChange }: {
+export function CalculatorForm({ form, onProjectSaved, onCalculationsChange, onOpenPdfCustomizer }: {
   form: UseFormReturn<FormData>;
   onProjectSaved?: () => void;
   onCalculationsChange?: (c: import('@/features/calculator/domain/cost-calculator').CostCalculations) => void;
+  onOpenPdfCustomizer?: () => void;
 }) {
   const navigate = useNavigate();
   const { toast } = useToast();
@@ -515,8 +516,8 @@ export function CalculatorForm({ form, onProjectSaved, onCalculationsChange }: {
   };
   const goPrev = () => setCurrentStep((prev) => Math.max(prev - 1, 0));
 
-  const inputClass = "h-11";
-  const sectionCardClass = "border-border/60 shadow-sm transition-[box-shadow,transform] duration-200 hover:shadow-md hover:-translate-y-[1px]";
+  const inputClass = "h-11 w-full";
+  const sectionCardClass = "rounded-[24px] border-white/10 bg-card/72 backdrop-blur-xl shadow-sm transition-[box-shadow,transform] duration-200 hover:shadow-md hover:-translate-y-[1px]";
   const iconClass = "h-4 w-4";
 
 
@@ -934,104 +935,88 @@ export function CalculatorForm({ form, onProjectSaved, onCalculationsChange }: {
             </motion.div>
           </AnimatePresence>
           
-          {/* Navigation + secondary actions */}
-          <div className="pt-4 space-y-2">
-            {/* Top row: Atrás + Continuar (mobile side-by-side, desktop with center actions) */}
-            <div className="flex items-center gap-2">
+          {/* Navigation + secondary actions — mobile-first, no overflow */}
+          <div className="w-full max-w-full overflow-hidden pt-4 pb-[calc(120px+env(safe-area-inset-bottom,0px))] lg:pb-0 space-y-3">
+            {/* Customizar PDF — mobile/tablet only, step 4 */}
+            {currentStep === 3 && onOpenPdfCustomizer && (
+              <Button
+                type="button"
+                variant="outline"
+                onClick={onOpenPdfCustomizer}
+                className="w-full lg:hidden h-12 rounded-xl gap-2"
+              >
+                <FileText className="h-4 w-4" />
+                {t('pdf_customizer_title', { defaultValue: 'Customizar PDF' })}
+              </Button>
+            )}
+            {/* Primary navigation: Atrás + Continuar */}
+            <div className="grid grid-cols-[48px_1fr] gap-2">
               <Button
                 type="button"
                 variant="secondary"
                 onClick={goPrev}
                 disabled={currentStep === 0}
-                className="rounded-xl gap-2"
+                className="h-12 w-12 rounded-xl"
+                aria-label={t('wizard_back', { defaultValue: 'Atrás' })}
               >
                 <ArrowLeft className="h-4 w-4" />
-                <span className="hidden sm:inline">{t('wizard_back', { defaultValue: 'Atrás' })}</span>
               </Button>
 
-              {/* Desktop secondary actions — hidden on mobile */}
-              <div className="hidden sm:flex flex-1 items-center justify-center gap-1">
-                <Button
-                  type="button"
-                  size="sm"
-                  variant="outline"
-                  onClick={handleSaveProject}
-                  loading={isSaving}
-                  className="rounded-xl gap-1.5"
-                >
-                  <Save className="h-4 w-4" />
-                  <span className="hidden sm:inline">{t('cf_save_project')}</span>
-                </Button>
-                <Button
-                  type="button"
-                  size="sm"
-                  variant="outline"
-                  onClick={handleNewProject}
-                  className="rounded-xl gap-1.5"
-                >
-                  <FilePlus className="h-4 w-4" />
-                  <span className="hidden sm:inline">{t('cf_new_project')}</span>
-                </Button>
-                <Button
-                  type="button"
-                  size="sm"
-                  variant="outline"
-                  onClick={handleShare}
-                  className="rounded-xl gap-1.5"
-                >
-                  <Share2 className="h-4 w-4" />
-                  <span className="hidden sm:inline">{t('cf_share')}</span>
-                </Button>
-              </div>
-
-              {/* Continuar / spacer */}
               {currentStep < totalSteps - 1 ? (
                 <Button
                   type="button"
                   variant="primary"
                   onClick={goNext}
-                  className="rounded-xl gap-2 ml-auto sm:ml-0"
+                  className="h-12 w-full rounded-xl gap-2"
                 >
                   {t('wizard_next', { defaultValue: 'Continuar' })}
                   <ArrowRight className="h-4 w-4" />
                 </Button>
               ) : (
-                <div className="flex-1" />
+                <Button
+                  type="button"
+                  variant="primary"
+                  onClick={handleSaveProject}
+                  loading={isSaving}
+                  className="h-12 w-full rounded-xl gap-2"
+                >
+                  <Save className="h-4 w-4" />
+                  {t('cf_save_project')}
+                </Button>
               )}
             </div>
 
-            {/* Mobile secondary actions — separate row */}
-            <div className="flex sm:hidden items-center justify-center gap-3">
+            {/* Secondary actions — full-width columns on mobile, wrapped row on desktop */}
+            <div className="grid grid-cols-1 gap-2 sm:grid-cols-3 sm:gap-3">
+              {currentStep < totalSteps - 1 && (
+                <Button
+                  type="button"
+                  variant="outline"
+                  onClick={handleSaveProject}
+                  loading={isSaving}
+                  className="h-11 w-full min-w-0 rounded-xl gap-1.5"
+                >
+                  <Save className="h-4 w-4 shrink-0" />
+                  <span className="truncate">{t('cf_save_project', { defaultValue: 'Guardar' })}</span>
+                </Button>
+              )}
               <Button
                 type="button"
-                size="sm"
-                variant="outline"
-                onClick={handleSaveProject}
-                loading={isSaving}
-                className="rounded-xl gap-1.5 flex-1"
-              >
-                <Save className="h-4 w-4" />
-                {t('cf_save_project')}
-              </Button>
-              <Button
-                type="button"
-                size="sm"
                 variant="outline"
                 onClick={handleNewProject}
-                className="rounded-xl gap-1.5 flex-1"
+                className="h-11 w-full min-w-0 rounded-xl gap-1.5"
               >
-                <FilePlus className="h-4 w-4" />
-                {t('cf_new_project')}
+                <FilePlus className="h-4 w-4 shrink-0" />
+                <span className="truncate">{t('cf_new_project', { defaultValue: 'Nuevo' })}</span>
               </Button>
               <Button
                 type="button"
-                size="sm"
                 variant="outline"
                 onClick={handleShare}
-                className="rounded-xl gap-1.5 flex-1"
+                className="h-11 w-full min-w-0 rounded-xl gap-1.5"
               >
-                <Share2 className="h-4 w-4" />
-                {t('cf_share')}
+                <Share2 className="h-4 w-4 shrink-0" />
+                <span className="truncate">{t('cf_share', { defaultValue: 'Compartir' })}</span>
               </Button>
             </div>
           </div>

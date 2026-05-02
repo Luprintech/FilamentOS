@@ -28,7 +28,7 @@ export function AppNav() {
 
   return (
     <nav
-      className="mb-7 grid h-auto w-full grid-cols-5 rounded-2xl border border-border/70 bg-card/60 backdrop-blur-md p-1 sm:p-1.5 print:hidden dark:border-white/10"
+      className="hidden mb-7 grid h-auto w-full grid-cols-5 rounded-2xl border border-border/70 bg-card/60 backdrop-blur-md p-1 sm:p-1.5 print:hidden dark:border-white/10 lg:grid"
       aria-label="Navegación principal"
     >
       {items.map(({ to, icon, label, guestDisabled }) => {
