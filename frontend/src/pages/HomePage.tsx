@@ -11,6 +11,7 @@ import { BuyMeCoffeeButton } from '@/components/buy-me-coffee-button';
 import { TikTokIcon } from '@/components/icons';
 import { Youtube, Instagram } from 'lucide-react';
 import { useAuth } from '@/context/auth-context';
+import { InstallPWAButton } from '@/components/install-pwa-button';
 
 // ── Theme toggle (standalone, sin dep de context) ─────────────────────────────
 function ThemeToggle() {
@@ -220,6 +221,11 @@ export function HomePage() {
               <p className="mt-4 text-xs text-muted-foreground/70">
                 {t('home_cta_disclaimer')}
               </p>
+
+              {/* PWA Install Button */}
+              <div className="mt-3 flex justify-center">
+                <InstallPWAButton />
+              </div>
 
               {/* Infografía */}
               <div className="mt-12 mx-auto w-full max-w-4xl group cursor-pointer">

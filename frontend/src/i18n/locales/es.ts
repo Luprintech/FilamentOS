@@ -107,6 +107,16 @@ const es = {
   home_cta2_subtitle: 'Gratis, sin instalación, desde el navegador.',
   home_cta2_login: 'Iniciar sesión con Google →',
   home_cta2_guest: 'O continúa sin cuenta',
+  // PWA install on home
+  home_install_button: 'Instalar FilamentOS',
+  home_install_title: 'Instalar FilamentOS',
+  home_install_ios_subtitle: 'Sigue estos pasos en Safari',
+  home_install_step1: 'Pulsa el botón',
+  home_install_share: 'Compartir',
+  home_install_step2: 'Selecciona',
+  home_install_add_home: 'Añadir a pantalla de inicio',
+  home_install_step3: 'Pulsa "Añadir" arriba a la derecha',
+  home_install_web: 'Instalar',
   // Cookie banner
   cookie_text: 'Usamos cookies técnicas necesarias para el inicio de sesión con Google. No almacenamos datos de seguimiento ni publicidad.',
   cookie_more: 'Más información',
